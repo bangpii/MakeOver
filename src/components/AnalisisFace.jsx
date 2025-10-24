@@ -1,8 +1,8 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef} from "react";
 import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaFoundation from "./WarnaFoundation";
-import { analyzeSkin, applyFoundation } from "../Api";
+import { applyFoundation, uploadPhoto, resetToOriginal } from "../Api";
 
 const AnalisisFace = () => {
   const navigate = useNavigate();
@@ -13,23 +13,8 @@ const AnalisisFace = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [skinAnalysis, setSkinAnalysis] = useState(null);
   const [isApplying, setIsApplying] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
   const fileInputRef = useRef(null);
-  const originalPhotoRef = useRef(null);
-
-  // Debounced foundation application
-  const applyFoundationDebounced = useCallback(async (foundation) => {
-    if (!photo || isApplying) return;
-    
-    setIsApplying(true);
-    try {
-      const result = await applyFoundation(photo, foundation.hex);
-      setProcessedPhoto(result.processed_image);
-    } catch (error) {
-      console.error("Failed to apply foundation:", error);
-    } finally {
-      setIsApplying(false);
-    }
-  }, [photo, isApplying]);
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -38,27 +23,24 @@ const AnalisisFace = () => {
       setIsAnalyzing(true);
       
       try {
-        // Analyze skin tone
-        const analysis = await analyzeSkin(file);
-        setSkinAnalysis(analysis);
-        setProcessedPhoto(analysis.processed_image);
-        originalPhotoRef.current = analysis.processed_image;
+        // Upload photo and get session
+        const uploadResult = await uploadPhoto(file);
+        setSessionId(uploadResult.session_id);
+        setSkinAnalysis(uploadResult);
+        setProcessedPhoto(uploadResult.processed_image);
         
         // Auto-select the best matching foundation
-        if (analysis.foundation_recommendations.recommended_matches.length > 0) {
-          const bestMatch = analysis.foundation_recommendations.recommended_matches[0];
+        if (uploadResult.foundation_recommendations?.recommended_matches?.length > 0) {
+          const bestMatch = uploadResult.foundation_recommendations.recommended_matches[0];
           setSelectedFoundation(bestMatch);
           // Auto-apply the best match
-          applyFoundationDebounced(bestMatch);
+          handleFoundationSelect(bestMatch);
         }
       } catch (error) {
-        console.error("Analysis failed:", error);
+        console.error("Upload failed:", error);
         // Fallback to original image
         const reader = new FileReader();
-        reader.onload = (e) => {
-          setProcessedPhoto(e.target.result);
-          originalPhotoRef.current = e.target.result;
-        };
+        reader.onload = (e) => setProcessedPhoto(e.target.result);
         reader.readAsDataURL(file);
       } finally {
         setIsAnalyzing(false);
@@ -68,7 +50,30 @@ const AnalisisFace = () => {
 
   const handleFoundationSelect = async (foundation) => {
     setSelectedFoundation(foundation);
-    applyFoundationDebounced(foundation);
+    
+    if (photo) {
+      setIsApplying(true);
+      try {
+        const result = await applyFoundation(photo, foundation.hex, sessionId);
+        setProcessedPhoto(result.processed_image);
+      } catch (error) {
+        console.error("Failed to apply foundation:", error);
+      } finally {
+        setIsApplying(false);
+      }
+    }
+  };
+
+  const handleResetToOriginal = async () => {
+    if (sessionId) {
+      try {
+        const result = await resetToOriginal(sessionId);
+        setProcessedPhoto(result.processed_image);
+        setSelectedFoundation(null);
+      } catch (error) {
+        console.error("Failed to reset:", error);
+      }
+    }
   };
 
   const handleSaveImage = () => {
@@ -86,11 +91,6 @@ const AnalisisFace = () => {
 
   const handleCloseFullscreen = () => {
     setIsFullscreen(false);
-  };
-
-  const handleResetFoundation = () => {
-    setProcessedPhoto(originalPhotoRef.current);
-    setSelectedFoundation(null);
   };
 
   return (
@@ -128,7 +128,7 @@ const AnalisisFace = () => {
               />
               
               {/* Skin tone info */}
-              {skinAnalysis && (
+              {skinAnalysis && skinAnalysis.skin_tone_hex && (
                 <div className="absolute top-4 left-4 bg-black/70 p-3 rounded-lg text-left">
                   <div className="text-sm">
                     <div className="flex items-center gap-2 mb-2">
@@ -139,7 +139,7 @@ const AnalisisFace = () => {
                       <span>Your Skin Tone</span>
                     </div>
                     <div className="text-xs opacity-80">
-                      {skinAnalysis.foundation_recommendations.primary_category} undertone
+                      {skinAnalysis.foundation_recommendations?.primary_category} undertone
                     </div>
                   </div>
                 </div>
@@ -158,12 +158,12 @@ const AnalisisFace = () => {
 
           {/* ICONS POJOK KANAN ATAS */}
           <div className="absolute top-4 right-4 flex items-center gap-3 md:gap-4">
-            {/* Reset */}
-            {processedPhoto && originalPhotoRef.current !== processedPhoto && (
+            {/* Reset to Original */}
+            {processedPhoto && sessionId && (
               <button
-                onClick={handleResetFoundation}
+                onClick={handleResetToOriginal}
                 className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-white text-white text-2xl hover:bg-white hover:text-pink-600 transition-all duration-300 shadow-md"
-                title="Reset Foundation"
+                title="Reset to Original"
               >
                 <i className="bx bx-reset"></i>
               </button>
