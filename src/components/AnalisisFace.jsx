@@ -2,7 +2,7 @@ import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaFoundation from "./WarnaFoundation";
-import { analyzeSkin, applyFoundation } from "./Api";
+import { analyzeSkin, applyFoundation } from "../Api";
 
 const AnalisisFace = () => {
   const navigate = useNavigate();
