@@ -21,27 +21,11 @@ export const uploadPhoto = async (imageFile) => {
       headers: {
         "Content-Type": "multipart/form-data",
       },
+      timeout: 30000, // 30 second timeout
     });
     return response.data;
   } catch (error) {
     console.error("Error uploading photo:", error);
-    throw error;
-  }
-};
-
-export const analyzeSkin = async (imageFile) => {
-  try {
-    const formData = new FormData();
-    formData.append("file", imageFile);
-    
-    const response = await axios.post(`${API_URL}/api/analyze-skin`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return response.data;
-  } catch (error) {
-    console.error("Error analyzing skin:", error);
     throw error;
   }
 };
@@ -59,6 +43,7 @@ export const applyFoundation = async (imageFile, foundationHex, sessionId = null
       headers: {
         "Content-Type": "multipart/form-data",
       },
+      timeout: 30000,
     });
     return response.data;
   } catch (error) {
@@ -69,8 +54,14 @@ export const applyFoundation = async (imageFile, foundationHex, sessionId = null
 
 export const resetToOriginal = async (sessionId) => {
   try {
-    const response = await axios.post(`${API_URL}/api/reset-to-original`, null, {
-      params: { session_id: sessionId }
+    const formData = new FormData();
+    formData.append("session_id", sessionId);
+    
+    const response = await axios.post(`${API_URL}/api/reset-to-original`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 10000,
     });
     return response.data;
   } catch (error) {
