@@ -69,3 +69,115 @@ export const resetToOriginal = async (sessionId) => {
     throw error;
   }
 };
+
+// ========== TAMBAHAN BARU UNTUK LIVE CAMERA PROCESSING ==========
+
+export const processLiveFrame = async (imageData, cheekColor = null, lipstickColor = null) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/process-live-frame`, {
+      image: imageData,
+      cheek_color: cheekColor,
+      lipstick_color: lipstickColor
+    }, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      timeout: 15000, // 15 second timeout untuk live processing
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error processing live frame:", error);
+    throw error;
+  }
+};
+
+export const applyCheekColor = async (imageFile, cheekHex, sessionId = null) => {
+  try {
+    const formData = new FormData();
+    formData.append("file", imageFile);
+    formData.append("cheek_hex", cheekHex);
+    if (sessionId) {
+      formData.append("session_id", sessionId);
+    }
+    
+    const response = await axios.post(`${API_URL}/api/apply-cheek-color`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 30000,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error applying cheek color:", error);
+    throw error;
+  }
+};
+
+export const applyLipstick = async (imageFile, lipstickHex, sessionId = null) => {
+  try {
+    const formData = new FormData();
+    formData.append("file", imageFile);
+    formData.append("lipstick_hex", lipstickHex);
+    if (sessionId) {
+      formData.append("session_id", sessionId);
+    }
+    
+    const response = await axios.post(`${API_URL}/api/apply-lipstick`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 30000,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error applying lipstick:", error);
+    throw error;
+  }
+};
+
+export const applyCombinedMakeup = async (imageFile, cheekHex = null, lipstickHex = null, sessionId = null) => {
+  try {
+    const formData = new FormData();
+    formData.append("file", imageFile);
+    if (cheekHex) {
+      formData.append("cheek_hex", cheekHex);
+    }
+    if (lipstickHex) {
+      formData.append("lipstick_hex", lipstickHex);
+    }
+    if (sessionId) {
+      formData.append("session_id", sessionId);
+    }
+    
+    const response = await axios.post(`${API_URL}/api/apply-combined-makeup`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 30000,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error applying combined makeup:", error);
+    throw error;
+  }
+};
+
+// Utility function untuk convert image ke base64
+export const imageToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+};
+
+// Utility function untuk capture frame dari video
+export const captureVideoFrame = (videoElement, quality = 0.8) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = videoElement.videoWidth;
+  canvas.height = videoElement.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', quality);
+};
