@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
-const WarnaFoundation = () => {
+const WarnaFoundation = ({ onFoundationSelect, selectedFoundation, recommendations }) => {
   const warna = {
     COOL: [
       { name: "Fair", hex: "#F9E6E6" },
@@ -45,33 +45,63 @@ const WarnaFoundation = () => {
   };
 
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [recommendedCategory, setRecommendedCategory] = useState(null);
+
+  useEffect(() => {
+    if (recommendations) {
+      setRecommendedCategory(recommendations.primary_category);
+      // Auto-select the recommended category
+      setSelectedCategory(recommendations.primary_category);
+      
+      // Auto-select the first recommended foundation
+      if (recommendations.recommended_matches.length > 0 && !selectedFoundation) {
+        onFoundationSelect(recommendations.recommended_matches[0]);
+      }
+    }
+  }, [recommendations]);
 
   const bgColors = {
     COOL: "bg-blue-300 hover:bg-blue-400",
-    NEUTRAL: "bg-gray-300 hover:bg-gray-400",
+    NEUTRAL: "bg-gray-300 hover:bg-gray-400", 
     WARM: "bg-orange-300 hover:bg-orange-400",
+  };
+
+  const handleCategoryClick = (category) => {
+    setSelectedCategory(selectedCategory === category ? null : category);
+  };
+
+  const handleFoundationClick = (foundation) => {
+    onFoundationSelect(foundation);
   };
 
   return (
     <div className="w-full p-4 md:p-6 lg:p-8 text-center">
+      {/* Recommended Badge */}
+      {recommendedCategory && (
+        <div className="mb-4 text-sm text-pink-400 font-semibold">
+          💡 Recommended: {recommendedCategory} undertone foundation
+        </div>
+      )}
+
       {/* Kategori Utama */}
       <div className="flex gap-3 overflow-x-auto no-scrollbar justify-center mb-5 flex-wrap md:flex-nowrap">
         {Object.keys(warna).map((key) => (
           <div
             key={key}
-            onClick={() =>
-              setSelectedCategory(selectedCategory === key ? null : key)
-            }
+            onClick={() => handleCategoryClick(key)}
             className={`flex-shrink-0 w-28 h-14 md:w-28 md:h-14 flex items-center justify-center rounded-2xl cursor-pointer transition-all duration-300 ${
               bgColors[key]
             } ${
               selectedCategory === key
                 ? "ring-4 ring-white ring-opacity-90 shadow-xl scale-105 font-bold"
                 : "shadow-md hover:shadow-lg"
+            } ${
+              key === recommendedCategory ? "ring-2 ring-pink-500" : ""
             }`}
           >
             <h2 className="text-sm md:text-xs lg:text-sm font-semibold text-gray-800 uppercase tracking-wide">
               {key}
+              {key === recommendedCategory && " ★"}
             </h2>
           </div>
         ))}
@@ -88,17 +118,43 @@ const WarnaFoundation = () => {
               <div
                 key={i}
                 title={item.name}
-                className="flex flex-col items-center cursor-pointer group"
+                className={`flex flex-col items-center cursor-pointer group ${
+                  selectedFoundation?.hex === item.hex ? 'scale-110' : ''
+                }`}
+                onClick={() => handleFoundationClick(item)}
               >
                 <div
-                  className="w-12 h-12 md:w-10 md:h-10 lg:w-11 lg:h-11 rounded-full border-2 border-white shadow-md hover:scale-110 transition-transform duration-300"
+                  className={`w-12 h-12 md:w-10 md:h-10 lg:w-11 lg:h-11 rounded-full border-2 ${
+                    selectedFoundation?.hex === item.hex 
+                      ? 'border-pink-500 ring-2 ring-pink-300' 
+                      : 'border-white'
+                  } shadow-md hover:scale-110 transition-transform duration-300`}
                   style={{ backgroundColor: item.hex }}
                 ></div>
-                <span className="text-[11px] md:text-[10px] lg:text-xs text-white mt-2 group-hover:font-semibold transition-all">
+                <span className={`text-[11px] md:text-[10px] lg:text-xs mt-2 transition-all ${
+                  selectedFoundation?.hex === item.hex
+                    ? 'text-pink-400 font-bold'
+                    : 'text-white group-hover:font-semibold'
+                }`}>
                   {item.name}
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Selected Foundation Info */}
+      {selectedFoundation && (
+        <div className="mt-4 p-3 bg-white/5 rounded-lg">
+          <div className="flex items-center justify-center gap-3">
+            <div 
+              className="w-8 h-8 rounded-full border border-white"
+              style={{ backgroundColor: selectedFoundation.hex }}
+            ></div>
+            <span className="text-white font-semibold">
+              Selected: {selectedFoundation.name}
+            </span>
           </div>
         </div>
       )}
