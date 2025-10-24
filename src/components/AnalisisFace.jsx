@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaFoundation from "./WarnaFoundation";
@@ -12,8 +12,24 @@ const AnalisisFace = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [skinAnalysis, setSkinAnalysis] = useState(null);
+  const [isApplying, setIsApplying] = useState(false);
   const fileInputRef = useRef(null);
-  const canvasRef = useRef(null);
+  const originalPhotoRef = useRef(null);
+
+  // Debounced foundation application
+  const applyFoundationDebounced = useCallback(async (foundation) => {
+    if (!photo || isApplying) return;
+    
+    setIsApplying(true);
+    try {
+      const result = await applyFoundation(photo, foundation.hex);
+      setProcessedPhoto(result.processed_image);
+    } catch (error) {
+      console.error("Failed to apply foundation:", error);
+    } finally {
+      setIsApplying(false);
+    }
+  }, [photo, isApplying]);
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -26,16 +42,23 @@ const AnalisisFace = () => {
         const analysis = await analyzeSkin(file);
         setSkinAnalysis(analysis);
         setProcessedPhoto(analysis.processed_image);
+        originalPhotoRef.current = analysis.processed_image;
         
         // Auto-select the best matching foundation
         if (analysis.foundation_recommendations.recommended_matches.length > 0) {
-          setSelectedFoundation(analysis.foundation_recommendations.recommended_matches[0]);
+          const bestMatch = analysis.foundation_recommendations.recommended_matches[0];
+          setSelectedFoundation(bestMatch);
+          // Auto-apply the best match
+          applyFoundationDebounced(bestMatch);
         }
       } catch (error) {
         console.error("Analysis failed:", error);
         // Fallback to original image
         const reader = new FileReader();
-        reader.onload = (e) => setProcessedPhoto(e.target.result);
+        reader.onload = (e) => {
+          setProcessedPhoto(e.target.result);
+          originalPhotoRef.current = e.target.result;
+        };
         reader.readAsDataURL(file);
       } finally {
         setIsAnalyzing(false);
@@ -45,19 +68,11 @@ const AnalisisFace = () => {
 
   const handleFoundationSelect = async (foundation) => {
     setSelectedFoundation(foundation);
-    
-    if (photo) {
-      try {
-        const result = await applyFoundation(photo, foundation.hex);
-        setProcessedPhoto(result.processed_image);
-      } catch (error) {
-        console.error("Failed to apply foundation:", error);
-      }
-    }
+    applyFoundationDebounced(foundation);
   };
 
   const handleSaveImage = () => {
-    if (canvasRef.current) {
+    if (processedPhoto) {
       const link = document.createElement('a');
       link.download = `makeover-${selectedFoundation?.name || 'foundation'}.jpg`;
       link.href = processedPhoto;
@@ -71,6 +86,11 @@ const AnalisisFace = () => {
 
   const handleCloseFullscreen = () => {
     setIsFullscreen(false);
+  };
+
+  const handleResetFoundation = () => {
+    setProcessedPhoto(originalPhotoRef.current);
+    setSelectedFoundation(null);
   };
 
   return (
@@ -95,14 +115,16 @@ const AnalisisFace = () => {
         {/* AREA FOTO */}
         <div className="relative border-4 border-white rounded-3xl w-[95%] md:w-[850px] h-[400px] md:h-[550px] flex items-center justify-center shadow-2xl bg-black overflow-hidden">
           {isAnalyzing ? (
-            <div className="text-white text-xl">Analyzing your skin tone...</div>
+            <div className="text-white text-xl flex flex-col items-center gap-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
+              Analyzing your skin tone...
+            </div>
           ) : processedPhoto ? (
             <>
               <img 
                 src={processedPhoto} 
                 alt="Processed" 
                 className="w-full h-full object-cover rounded-2xl"
-                ref={canvasRef}
               />
               
               {/* Skin tone info */}
@@ -122,6 +144,13 @@ const AnalisisFace = () => {
                   </div>
                 </div>
               )}
+
+              {/* Applying overlay */}
+              {isApplying && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <div className="text-white text-lg">Applying foundation...</div>
+                </div>
+              )}
             </>
           ) : (
             <div className="text-white text-xl">Upload your photo to begin analysis</div>
@@ -129,6 +158,17 @@ const AnalisisFace = () => {
 
           {/* ICONS POJOK KANAN ATAS */}
           <div className="absolute top-4 right-4 flex items-center gap-3 md:gap-4">
+            {/* Reset */}
+            {processedPhoto && originalPhotoRef.current !== processedPhoto && (
+              <button
+                onClick={handleResetFoundation}
+                className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-white text-white text-2xl hover:bg-white hover:text-pink-600 transition-all duration-300 shadow-md"
+                title="Reset Foundation"
+              >
+                <i className="bx bx-reset"></i>
+              </button>
+            )}
+
             {/* Save */}
             {processedPhoto && (
               <button
@@ -176,6 +216,7 @@ const AnalisisFace = () => {
               onFoundationSelect={handleFoundationSelect}
               selectedFoundation={selectedFoundation}
               recommendations={skinAnalysis?.foundation_recommendations}
+              isApplying={isApplying}
             />
           </div>
         )}
