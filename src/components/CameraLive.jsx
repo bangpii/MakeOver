@@ -369,7 +369,8 @@ const CameraLive = () => {
           </div>
 
           {/* COLOR SELECTORS - BOTTOM */}
-          {isCameraOn && !capturedPhoto && (
+          {/* PERBAIKAN: Tampilkan color selectors SELAMA camera aktif, bahkan saat belum capture photo */}
+          {isCameraOn && (
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-[95%] max-w-3xl flex flex-col md:flex-row gap-3 md:gap-4 z-10">
               <div className="flex-1 min-w-0">
                 <WarnaKulitPipi onColorSelect={handleCheekColorSelect} />
