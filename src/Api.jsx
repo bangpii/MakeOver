@@ -2,6 +2,12 @@ import axios from "axios";
 
 const API_URL = "https://backendmakeover-production.up.railway.app";
 
+// Buat instance axios dengan timeout yang lebih pendek untuk live processing
+const liveApi = axios.create({
+  baseURL: API_URL,
+  timeout: 8000, // 8 second timeout untuk live processing
+});
+
 export const getHello = async () => {
   try {
     const response = await axios.get(`${API_URL}/api/hello`);
@@ -74,7 +80,7 @@ export const resetToOriginal = async (sessionId) => {
 
 export const processLiveFrame = async (imageData, cheekColor = null, lipstickColor = null) => {
   try {
-    const response = await axios.post(`${API_URL}/api/process-live-frame`, {
+    const response = await liveApi.post('/api/process-live-frame', {
       image: imageData,
       cheek_color: cheekColor,
       lipstick_color: lipstickColor
@@ -82,7 +88,6 @@ export const processLiveFrame = async (imageData, cheekColor = null, lipstickCol
       headers: {
         "Content-Type": "application/json",
       },
-      timeout: 15000, // 15 second timeout untuk live processing
     });
     return response.data;
   } catch (error) {
