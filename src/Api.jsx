@@ -5,7 +5,7 @@ const API_URL = "https://backendmakeover-production.up.railway.app";
 // Buat instance axios dengan timeout yang lebih pendek untuk live processing
 const liveApi = axios.create({
   baseURL: API_URL,
-  timeout: 5000, // 5 second timeout untuk live processing (lebih pendek)
+  timeout: 8000, // 8 second timeout untuk live processing
 });
 
 // Instance untuk upload biasa
@@ -13,6 +13,13 @@ const uploadApi = axios.create({
   baseURL: API_URL,
   timeout: 30000,
 });
+
+// Cache untuk mencegah request berlebihan
+let lastProcessTime = 0;
+const PROCESS_INTERVAL = 500; // Minimum 500ms antara request
+let activeRequest = null;
+let lastCheekColor = null;
+let lastLipstickColor = null;
 
 export const getHello = async () => {
   try {
@@ -33,7 +40,7 @@ export const uploadPhoto = async (imageFile) => {
       headers: {
         "Content-Type": "multipart/form-data",
       },
-      timeout: 30000, // 30 second timeout
+      timeout: 30000,
     });
     return response.data;
   } catch (error) {
@@ -84,12 +91,7 @@ export const resetToOriginal = async (sessionId) => {
 
 // ========== OPTIMIZED LIVE CAMERA PROCESSING ==========
 
-// Cache untuk mencegah request berlebihan
-let lastProcessTime = 0;
-const PROCESS_INTERVAL = 300; // Minimum 300ms antara request
-let activeRequest = null;
-
-export const processLiveFrameOptimized = async (imageData, cheekColor = null, lipstickColor = null) => {
+export const processLiveFrame = async (imageData, cheekColor = null, lipstickColor = null) => {
   const now = Date.now();
   
   // Skip jika terlalu cepat dari request sebelumnya
@@ -97,16 +99,30 @@ export const processLiveFrameOptimized = async (imageData, cheekColor = null, li
     return null;
   }
   
-  // Skip jika ada request yang masih aktif
-  if (activeRequest) {
+  // Skip jika warna tidak berubah dan ada request yang masih aktif
+  if (activeRequest && cheekColor === lastCheekColor && lipstickColor === lastLipstickColor) {
     return null;
+  }
+  
+  // Skip jika tidak ada warna yang dipilih
+  if (!cheekColor && !lipstickColor) {
+    lastCheekColor = null;
+    lastLipstickColor = null;
+    return {
+      success: true,
+      processed_image: imageData,
+      message: "No colors selected",
+      effects_applied: false
+    };
   }
   
   try {
     activeRequest = true;
     lastProcessTime = now;
+    lastCheekColor = cheekColor;
+    lastLipstickColor = lipstickColor;
     
-    const response = await liveApi.post('/api/process-live-frame-optimized', {
+    const response = await liveApi.post('/api/process-live-frame', {
       image: imageData,
       cheek_color: cheekColor,
       lipstick_color: lipstickColor
@@ -125,7 +141,13 @@ export const processLiveFrameOptimized = async (imageData, cheekColor = null, li
       return await applyLocalEffects(imageData, cheekColor, lipstickColor);
     }
     
-    throw error;
+    // Return frame asli jika error
+    return {
+      success: true,
+      processed_image: imageData,
+      message: "Using original frame due to error",
+      effects_applied: false
+    };
   } finally {
     activeRequest = false;
   }
@@ -182,7 +204,8 @@ const applyLocalEffects = (imageData, cheekColor, lipstickColor) => {
       resolve({
         success: true,
         processed_image: processedImage,
-        message: "Local effects applied (fallback mode)"
+        message: "Local effects applied (fallback mode)",
+        effects_applied: true
       });
     };
     img.src = imageData;
@@ -242,11 +265,11 @@ export const imageToBase64 = (file) => {
 };
 
 // Utility function untuk capture frame dari video dengan optimasi
-export const captureVideoFrame = (videoElement, quality = 0.7) => {
+export const captureVideoFrame = (videoElement, quality = 0.8) => {
   const canvas = document.createElement('canvas');
   
-  // Resize untuk performa
-  const scale = 0.7; // Scale down untuk performa
+  // Resize untuk performa - ukuran sedang
+  const scale = 0.6; 
   canvas.width = videoElement.videoWidth * scale;
   canvas.height = videoElement.videoHeight * scale;
   

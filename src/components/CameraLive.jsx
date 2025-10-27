@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaKulitPipi from "./WarnaKulitPipi";
 import WarnaLipstik from "./WarnaLipstik";
-import { processLiveFrameOptimized, captureVideoFrame } from "../Api";
+import { processLiveFrame, captureVideoFrame } from "../Api";
 
 const API_URL = "https://backendmakeover-production.up.railway.app";
 
@@ -26,15 +26,14 @@ const CameraLive = () => {
   const selectedLipstickColorRef = useRef(selectedLipstickColor);
   const animationFrameRef = useRef(null);
   const lastProcessTimeRef = useRef(0);
+  const effectsActiveRef = useRef(false);
 
   // Sync refs dengan state
   useEffect(() => {
     selectedCheekColorRef.current = selectedCheekColor;
-  }, [selectedCheekColor]);
-
-  useEffect(() => {
     selectedLipstickColorRef.current = selectedLipstickColor;
-  }, [selectedLipstickColor]);
+    effectsActiveRef.current = !!(selectedCheekColor || selectedLipstickColor);
+  }, [selectedCheekColor, selectedLipstickColor]);
 
   // Check backend status
   useEffect(() => {
@@ -58,30 +57,32 @@ const CameraLive = () => {
 
     // Jika tidak ada warna yang dipilih, return frame asli
     if (!currentCheekColor && !currentLipstickColor) {
-      return frameData;
+      return {
+        success: true,
+        processed_image: frameData,
+        effects_applied: false
+      };
     }
 
     // Prevent multiple simultaneous processing
     if (processingRef.current) {
-      return frameData;
+      return null;
     }
 
     try {
       processingRef.current = true;
       setIsProcessing(true);
       
-      const result = await processLiveFrameOptimized(frameData, currentCheekColor, currentLipstickColor);
-      
-      if (result && result.success) {
-        return result.processed_image;
-      } else {
-        // Jika gagal, return frame asli
-        return frameData;
-      }
+      const result = await processLiveFrame(frameData, currentCheekColor, currentLipstickColor);
+      return result;
       
     } catch (error) {
       console.error('Error processing frame:', error);
-      return frameData; // Return original frame on error
+      return {
+        success: true,
+        processed_image: frameData,
+        effects_applied: false
+      };
     } finally {
       processingRef.current = false;
       setIsProcessing(false);
@@ -92,17 +93,17 @@ const CameraLive = () => {
     if (!videoRef.current || !isCameraOn || processingRef.current) return;
 
     try {
-      const frameData = captureVideoFrame(videoRef.current, 0.7);
-      const processedFrame = await processFrame(frameData);
+      const frameData = captureVideoFrame(videoRef.current, 0.8);
+      const result = await processFrame(frameData);
       
-      if (canvasRef.current && processedFrame) {
+      if (result && canvasRef.current) {
         const displayCtx = canvasRef.current.getContext('2d');
         const img = new Image();
         img.onload = () => {
           displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
           displayCtx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
         };
-        img.src = processedFrame;
+        img.src = result.processed_image;
       }
     } catch (error) {
       console.error('Error in captureAndProcessFrame:', error);
@@ -161,20 +162,22 @@ const CameraLive = () => {
     setIsCameraOn(false);
   };
 
-  // OPTIMIZED: Processing loop dengan throttling yang lebih baik
+  // OPTIMIZED: Processing loop yang lebih efisien
   useEffect(() => {
     const processLoop = () => {
       if (!isCameraOn) {
         return;
       }
 
-      const hasColorEffect = selectedCheekColorRef.current || selectedLipstickColorRef.current;
+      const hasColorEffect = effectsActiveRef.current;
       const now = Date.now();
       
-      // Throttle processing: maksimal 3 FPS untuk efek
-      if (hasColorEffect && (now - lastProcessTimeRef.current > 300)) {
-        captureAndProcessFrame();
-        lastProcessTimeRef.current = now;
+      if (hasColorEffect) {
+        // Jika ada efek, process dengan interval yang lebih longgar
+        if (now - lastProcessTimeRef.current > 500) { // 2 FPS maksimal
+          captureAndProcessFrame();
+          lastProcessTimeRef.current = now;
+        }
       }
       
       animationFrameRef.current = requestAnimationFrame(processLoop);
@@ -195,6 +198,7 @@ const CameraLive = () => {
     if (!isCameraOn) return;
 
     try {
+      // Capture frame terakhir dengan efek
       await captureAndProcessFrame();
       setCapturedPhoto(true);
       
@@ -292,7 +296,7 @@ const CameraLive = () => {
           <video 
             ref={videoRef} 
             className={`w-full h-full object-cover transition-opacity duration-300 ${
-              capturedPhoto ? 'opacity-0' : 'opacity-100'
+              capturedPhoto || (selectedCheekColor || selectedLipstickColor) ? 'opacity-0' : 'opacity-100'
             }`}
             autoPlay 
             muted
@@ -302,7 +306,7 @@ const CameraLive = () => {
           <canvas
             ref={canvasRef}
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-              capturedPhoto ? 'opacity-100' : 'opacity-0'
+              capturedPhoto || (selectedCheekColor || selectedLipstickColor) ? 'opacity-100' : 'opacity-0'
             }`}
           />
 
@@ -357,7 +361,7 @@ const CameraLive = () => {
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-white text-lg font-semibold">Processing...</span>
+                <span className="text-white text-lg font-semibold">Applying Effects...</span>
               </div>
             </div>
           )}
@@ -368,7 +372,7 @@ const CameraLive = () => {
               <div className="text-center text-white/70">
                 <i className="bx bx-camera-off text-6xl md:text-8xl mb-4"></i>
                 <p className="text-lg md:text-xl">Kamera belum aktif</p>
-                <p className="text-sm md:text-base mt-2">Klik &quot;Open Camera&quot; untuk memulai</p>
+                <p className="text-sm md:text-base mt-2">Klik "Open Camera" untuk memulai</p>
               </div>
             </div>
           )}
