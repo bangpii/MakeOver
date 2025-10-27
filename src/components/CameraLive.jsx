@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaKulitPipi from "./WarnaKulitPipi";
 import WarnaLipstik from "./WarnaLipstik";
-import { processLiveFrame, checkBackendHealth, applyLocalColorOverlay } from "./Api_Camera";
+import { processLiveFrame, checkBackendHealth, applyLocalColorOverlay } from "../Api_Camera";
 
 const CameraLive = () => {
   const navigate = useNavigate(); 
