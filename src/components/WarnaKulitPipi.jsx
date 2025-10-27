@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 
 const WarnaKulitPipi = ({ onColorSelect }) => {
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -23,24 +23,31 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
     ],
   };
 
-  const handleColorClick = (item) => {
+  const handleColorClick = useCallback((item) => {
     setSelectedColor(item.hex);
     if (onColorSelect) {
       onColorSelect(item.hex);
     }
-  };
+  }, [onColorSelect]);
 
-  const handleCategoryClick = (key) => {
+  const handleCategoryClick = useCallback((key) => {
     if (selectedCategory === key) {
       setSelectedCategory(null);
       setSelectedColor(null);
       if (onColorSelect) {
-        onColorSelect(null); // Reset color ketika kategori ditutup
+        onColorSelect(null);
       }
     } else {
       setSelectedCategory(key);
     }
-  };
+  }, [selectedCategory, onColorSelect]);
+
+  const handleClearColor = useCallback(() => {
+    setSelectedColor(null);
+    if (onColorSelect) {
+      onColorSelect(null);
+    }
+  }, [onColorSelect]);
 
   return (
     <div className="w-full p-1 sm:p-2 md:p-4 lg:p-6 text-center">
@@ -56,7 +63,7 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
           >
             <img
               src="/blush.png"
-              alt="Background"
+              alt="Blush"
               className="absolute inset-0 w-full h-full object-cover opacity-70 hover:opacity-90 transition-opacity duration-300 rounded-xl sm:rounded-2xl"
             />
             {selectedColor && selectedCategory === key && (
@@ -74,10 +81,7 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
             <span className="text-white text-xs font-semibold">Pilih Warna Pipi:</span>
             {selectedColor && (
               <button 
-                onClick={() => {
-                  setSelectedColor(null);
-                  if (onColorSelect) onColorSelect(null);
-                }}
+                onClick={handleClearColor}
                 className="text-white text-xs bg-red-500 hover:bg-red-600 px-2 py-1 rounded transition-colors"
               >
                 Clear
@@ -85,8 +89,7 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
             )}
           </div>
           <div
-            className="flex flex-wrap md:flex-nowrap gap-1 sm:gap-2 md:gap-3 justify-center md:justify-start overflow-x-auto no-scrollbar"
-            tabIndex={0}
+            className="flex flex-wrap gap-1 sm:gap-2 md:gap-3 justify-center"
           >
             {warna[selectedCategory].map((item, i) => (
               <div
@@ -97,7 +100,7 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
               >
                 <div
                   className={`w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full border-2 shadow-md hover:scale-110 transition-transform duration-300 ${
-                    selectedColor === item.hex ? "border-yellow-400 ring-2 ring-yellow-300" : "border-white"
+                    selectedColor === item.hex ? "border-yellow-400 ring-2 ring-yellow-300 scale-110" : "border-white"
                   }`}
                   style={{ backgroundColor: item.hex }}
                 ></div>
@@ -124,4 +127,4 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
   );
 };
 
-export default WarnaKulitPipi;
+export default React.memo(WarnaKulitPipi);
