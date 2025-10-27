@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaKulitPipi from "./WarnaKulitPipi";
 import WarnaLipstik from "./WarnaLipstik";
-import { processLiveFrame } from "../Api";
+import { processLiveFrame, checkBackendHealth, applyLocalColorOverlay } from "../Api_Camera";
 
 const CameraLive = () => {
   const navigate = useNavigate(); 
@@ -17,11 +17,13 @@ const CameraLive = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [stream, setStream] = useState(null);
   const [backendStatus, setBackendStatus] = useState("unknown");
+  const [useBackend, setUseBackend] = useState(true);
   
   // Refs untuk menghindari infinite loop
   const processingRef = useRef(false);
   const selectedCheekColorRef = useRef(selectedCheekColor);
   const selectedLipstickColorRef = useRef(selectedLipstickColor);
+  const frameCounterRef = useRef(0);
 
   // Sync refs dengan state
   useEffect(() => {
@@ -32,26 +34,42 @@ const CameraLive = () => {
     selectedLipstickColorRef.current = selectedLipstickColor;
   }, [selectedLipstickColor]);
 
-  // Check backend status
+  // Check backend status saat component mount
   useEffect(() => {
     checkBackendStatus();
   }, []);
 
   const checkBackendStatus = async () => {
     try {
-      const response = await fetch("https://backendmakeover-production.up.railway.app/api/health");
-      const data = await response.json();
-      setBackendStatus(data.mediapipe_available ? "healthy" : "limited");
+      console.log("🔍 Checking backend status...");
+      const health = await checkBackendHealth();
+      
+      if (health.status === "healthy" && health.mediapipe_available) {
+        setBackendStatus("healthy");
+        setUseBackend(true);
+        console.log("✅ Backend is healthy with MediaPipe support");
+      } else if (health.status === "healthy") {
+        setBackendStatus("limited");
+        setUseBackend(true);
+        console.log("⚠️ Backend is healthy but MediaPipe not available");
+      } else {
+        setBackendStatus("offline");
+        setUseBackend(false);
+        console.log("❌ Backend is offline - using local effects");
+      }
     } catch (error) {
-      console.error("Backend health check failed:", error);
+      console.error("❌ Backend health check failed:", error);
       setBackendStatus("offline");
+      setUseBackend(false);
     }
   };
 
+  // Fungsi utama untuk memproses frame
   const processFrame = useCallback(async (frameData) => {
     const currentCheekColor = selectedCheekColorRef.current;
     const currentLipstickColor = selectedLipstickColorRef.current;
 
+    // Jika tidak ada warna yang dipilih, return frame asli
     if (!currentCheekColor && !currentLipstickColor) {
       return frameData;
     }
@@ -65,84 +83,69 @@ const CameraLive = () => {
       processingRef.current = true;
       setIsProcessing(true);
       
-      const result = await processLiveFrame(frameData, currentCheekColor, currentLipstickColor);
-      return result.processed_image;
+      let processedFrame;
+      
+      if (useBackend && backendStatus !== "offline") {
+        // Gunakan backend processing
+        console.log("🚀 Using backend processing");
+        const result = await processLiveFrame(frameData, currentCheekColor, currentLipstickColor);
+        processedFrame = result.processed_image;
+      } else {
+        // Gunakan efek lokal
+        console.log("🔄 Using local color overlay");
+        processedFrame = await applyLocalColorOverlay(frameData, currentCheekColor, currentLipstickColor);
+      }
+      
+      return processedFrame;
       
     } catch (error) {
-      console.error('Error processing frame:', error);
-      return applySimpleColorOverlay(frameData, currentCheekColor, currentLipstickColor);
+      console.error('❌ Error processing frame:', error);
+      
+      // Fallback ke efek lokal
+      try {
+        console.log("🔄 Falling back to local effects");
+        return await applyLocalColorOverlay(frameData, currentCheekColor, currentLipstickColor);
+      } catch (fallbackError) {
+        console.error('💥 Even fallback failed:', fallbackError);
+        return frameData; // Return original frame as last resort
+      }
     } finally {
       processingRef.current = false;
       setIsProcessing(false);
     }
-  }, []);
+  }, [useBackend, backendStatus]);
 
-  // Simple local color overlay sebagai fallback
-  const applySimpleColorOverlay = (frameData, cheekColor, lipstickColor) => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        
-        ctx.drawImage(img, 0, 0);
-        
-        if (cheekColor) {
-          ctx.fillStyle = cheekColor + '30';
-          ctx.globalCompositeOperation = 'color';
-          
-          const cheekWidth = canvas.width * 0.3;
-          const cheekHeight = canvas.height * 0.2;
-          const cheekTop = canvas.height * 0.4;
-          
-          ctx.fillRect(canvas.width * 0.1, cheekTop, cheekWidth, cheekHeight);
-          ctx.fillRect(canvas.width * 0.6, cheekTop, cheekWidth, cheekHeight);
-        }
-        
-        if (lipstickColor) {
-          ctx.fillStyle = lipstickColor + '50';
-          ctx.globalCompositeOperation = 'color';
-          
-          const lipWidth = canvas.width * 0.4;
-          const lipHeight = canvas.height * 0.1;
-          const lipTop = canvas.height * 0.65;
-          
-          ctx.fillRect((canvas.width - lipWidth) / 2, lipTop, lipWidth, lipHeight);
-        }
-        
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
-      };
-      img.src = frameData;
-    });
-  };
-
+  // Fungsi untuk capture frame dan proses
   const captureAndProcessFrame = useCallback(async () => {
     if (!videoRef.current || !isCameraOn || processingRef.current) return;
 
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      const video = videoRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      // Draw current video frame to canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const frameData = canvas.toDataURL('image/jpeg', 0.8);
       
+      // Process the frame dengan efek makeup
       const processedFrame = await processFrame(frameData);
       
+      // Display processed frame di canvas
       if (canvasRef.current && processedFrame) {
         const displayCtx = canvasRef.current.getContext('2d');
         const img = new Image();
         img.onload = () => {
+          // Clear canvas dan draw processed image
           displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
           displayCtx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
         };
         img.src = processedFrame;
       }
     } catch (error) {
-      console.error('Error in captureAndProcessFrame:', error);
+      console.error('❌ Error in captureAndProcessFrame:', error);
     }
   }, [isCameraOn, processFrame]);
 
@@ -150,6 +153,7 @@ const CameraLive = () => {
   const handleToggleCamera = async () => {
     if (!isCameraOn) {
       try {
+        console.log("📷 Starting camera...");
         const userStream = await navigator.mediaDevices.getUserMedia({
           video: { 
             facingMode,
@@ -166,14 +170,17 @@ const CameraLive = () => {
           setIsCameraOn(true);
           setCapturedPhoto(false);
           
+          // Setup canvas size
           if (canvasRef.current) {
             canvasRef.current.width = videoRef.current.videoWidth;
             canvasRef.current.height = videoRef.current.videoHeight;
           }
+          
+          console.log("✅ Camera started successfully");
         };
 
       } catch (err) {
-        console.error("Gagal membuka kamera:", err);
+        console.error("❌ Failed to open camera:", err);
         alert("Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.");
       }
     } else {
@@ -190,37 +197,49 @@ const CameraLive = () => {
       videoRef.current.srcObject = null;
     }
     setIsCameraOn(false);
+    console.log("📷 Camera closed");
   };
 
-  // FIXED: Processing loop dengan kontrol yang lebih baik
+  // Processing loop untuk real-time effects
   useEffect(() => {
     let animationFrameId;
     let lastProcessTime = 0;
-    const PROCESS_INTERVAL = 500; // Process every 500ms (lebih lambat)
+    const PROCESS_INTERVAL = 300; // Process every 300ms untuk performance
 
     const processLoop = (currentTime) => {
       if (!isCameraOn) {
-        cancelAnimationFrame(animationFrameId);
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
         return;
       }
 
       const hasColorEffect = selectedCheekColorRef.current || selectedLipstickColorRef.current;
       
+      // Only process if we have color effects and enough time has passed
       if (hasColorEffect && (currentTime - lastProcessTime > PROCESS_INTERVAL)) {
         captureAndProcessFrame();
         lastProcessTime = currentTime;
+        frameCounterRef.current++;
+        
+        // Log every 10 frames untuk debugging
+        if (frameCounterRef.current % 10 === 0) {
+          console.log(`🔄 Processed ${frameCounterRef.current} frames`);
+        }
       }
       
       animationFrameId = requestAnimationFrame(processLoop);
     };
 
     if (isCameraOn) {
+      console.log("🔄 Starting processing loop");
       animationFrameId = requestAnimationFrame(processLoop);
     }
 
     return () => {
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
+        console.log("🔄 Processing loop stopped");
       }
     };
   }, [isCameraOn, captureAndProcessFrame]);
@@ -229,6 +248,7 @@ const CameraLive = () => {
     if (!isCameraOn) return;
 
     try {
+      console.log("📸 Taking photo...");
       await captureAndProcessFrame();
       setCapturedPhoto(true);
       
@@ -236,7 +256,7 @@ const CameraLive = () => {
         closeCamera();
       }, 100);
     } catch (error) {
-      console.error('Error taking photo:', error);
+      console.error('❌ Error taking photo:', error);
     }
   };
 
@@ -251,6 +271,7 @@ const CameraLive = () => {
     }
 
     try {
+      console.log(`🔄 Switching camera to: ${newFacingMode}`);
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: newFacingMode,
@@ -263,22 +284,34 @@ const CameraLive = () => {
       setStream(newStream);
       videoRef.current.play();
     } catch (err) {
-      console.error("Gagal switch kamera:", err);
+      console.error("❌ Failed to switch camera:", err);
     }
   };
 
-  // FIXED: Debounced color selection
+  // Handler untuk pilihan warna
   const handleCheekColorSelect = useCallback((colorHex) => {
+    console.log(`🎨 Cheek color selected: ${colorHex}`);
     setSelectedCheekColor(colorHex);
   }, []);
 
   const handleLipstickColorSelect = useCallback((colorHex) => {
+    console.log(`💄 Lipstick color selected: ${colorHex}`);
     setSelectedLipstickColor(colorHex);
   }, []);
 
   const handleRetakePhoto = () => {
     setCapturedPhoto(false);
     handleToggleCamera();
+  };
+
+  const handleSavePhoto = () => {
+    if (canvasRef.current) {
+      const link = document.createElement('a');
+      link.download = `makeover-${new Date().getTime()}.jpg`;
+      link.href = canvasRef.current.toDataURL('image/jpeg', 0.9);
+      link.click();
+      console.log("💾 Photo saved");
+    }
   };
 
   return (
@@ -301,20 +334,29 @@ const CameraLive = () => {
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-6">
         {/* BACKEND STATUS */}
-        {backendStatus === "limited" && (
-          <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-3 text-center">
-            <p className="text-yellow-300 text-sm">
-              Backend dalam mode terbatas - menggunakan efek dasar
-            </p>
-          </div>
-        )}
-        {backendStatus === "offline" && (
-          <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-center">
-            <p className="text-red-300 text-sm">
-              Backend offline - menggunakan efek lokal
-            </p>
-          </div>
-        )}
+        <div className="w-full max-w-4xl">
+          {backendStatus === "healthy" && (
+            <div className="bg-green-500/20 border border-green-500 rounded-lg p-3 text-center mb-4">
+              <p className="text-green-300 text-sm">
+                ✅ Backend connected - Advanced face detection active
+              </p>
+            </div>
+          )}
+          {backendStatus === "limited" && (
+            <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-3 text-center mb-4">
+              <p className="text-yellow-300 text-sm">
+                ⚠️ Backend limited - Using basic effects
+              </p>
+            </div>
+          )}
+          {backendStatus === "offline" && (
+            <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-center mb-4">
+              <p className="text-red-300 text-sm">
+                ❌ Backend offline - Using local effects
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* CAMERA CONTAINER */}
         <div className="relative w-full max-w-4xl aspect-[4/3] bg-black rounded-3xl border-4 border-white/30 shadow-2xl overflow-hidden">
@@ -352,7 +394,7 @@ const CameraLive = () => {
                 <button
                   className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-xl hover:bg-green-500 hover:border-green-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
                   title="Save Photo"
-                  onClick={() => console.log("Simulasi simpan foto")}
+                  onClick={handleSavePhoto}
                 >
                   <i className="bx bx-save"></i>
                 </button>
@@ -372,11 +414,17 @@ const CameraLive = () => {
           {isCameraOn && !capturedPhoto && (
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-[95%] max-w-3xl flex flex-col md:flex-row gap-3 md:gap-4 z-10">
               <div className="flex-1 min-w-0">
-                <WarnaKulitPipi onColorSelect={handleCheekColorSelect} />
+                <WarnaKulitPipi 
+                  onColorSelect={handleCheekColorSelect}
+                  selectedColor={selectedCheekColor}
+                />
               </div>
 
               <div className="flex-1 min-w-0">
-                <WarnaLipstik onColorSelect={handleLipstickColorSelect} />
+                <WarnaLipstik 
+                  onColorSelect={handleLipstickColorSelect}
+                  selectedColor={selectedLipstickColor}
+                />
               </div>
             </div>
           )}
@@ -386,7 +434,7 @@ const CameraLive = () => {
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-white text-lg font-semibold">Processing...</span>
+                <span className="text-white text-lg font-semibold">Applying Makeup...</span>
               </div>
             </div>
           )}
@@ -438,6 +486,12 @@ const CameraLive = () => {
                   style={{ backgroundColor: selectedCheekColor }}
                 ></div>
                 <span className="text-white text-sm">Blush</span>
+                <button 
+                  onClick={() => setSelectedCheekColor(null)}
+                  className="text-xs bg-red-500 hover:bg-red-600 w-5 h-5 rounded-full flex items-center justify-center"
+                >
+                  ×
+                </button>
               </div>
             )}
             {selectedLipstickColor && (
@@ -447,6 +501,12 @@ const CameraLive = () => {
                   style={{ backgroundColor: selectedLipstickColor }}
                 ></div>
                 <span className="text-white text-sm">Lipstick</span>
+                <button 
+                  onClick={() => setSelectedLipstickColor(null)}
+                  className="text-xs bg-red-500 hover:bg-red-600 w-5 h-5 rounded-full flex items-center justify-center"
+                >
+                  ×
+                </button>
               </div>
             )}
           </div>

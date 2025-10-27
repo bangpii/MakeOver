@@ -1,11 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
-const WarnaKulitPipi = ({ onColorSelect }) => {
+const WarnaKulitPipi = ({ onColorSelect, selectedColor }) => {
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedColor, setSelectedColor] = useState(null);
 
   const warna = {
-    WarnaKulitPipi: [
+    Blush: [
       { name: "Soft Pink", hex: "#FFB6C1" },
       { name: "Light Coral", hex: "#F08080" },
       { name: "Peach", hex: "#FFDAB9" },
@@ -24,7 +23,7 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
   };
 
   const handleColorClick = (item) => {
-    setSelectedColor(item.hex);
+    console.log(`🎨 Selected cheek color: ${item.name} - ${item.hex}`);
     if (onColorSelect) {
       onColorSelect(item.hex);
     }
@@ -33,7 +32,6 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
   const handleCategoryClick = (key) => {
     if (selectedCategory === key) {
       setSelectedCategory(null);
-      setSelectedColor(null);
       if (onColorSelect) {
         onColorSelect(null); // Reset color ketika kategori ditutup
       }
@@ -41,6 +39,13 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
       setSelectedCategory(key);
     }
   };
+
+  // Auto-select category jika color dipilih dari luar
+  useEffect(() => {
+    if (selectedColor && !selectedCategory) {
+      setSelectedCategory("Blush");
+    }
+  }, [selectedColor, selectedCategory]);
 
   return (
     <div className="w-full p-1 sm:p-2 md:p-4 lg:p-6 text-center">
@@ -56,11 +61,16 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
           >
             <img
               src="/blush.png"
-              alt="Background"
+              alt="Blush"
               className="absolute inset-0 w-full h-full object-cover opacity-70 hover:opacity-90 transition-opacity duration-300 rounded-xl sm:rounded-2xl"
             />
+            <span className="relative z-10 text-white text-xs font-bold text-shadow bg-black/30 px-2 py-1 rounded">
+              {key}
+            </span>
+            
+            {/* Indicator untuk warna yang aktif */}
             {selectedColor && selectedCategory === key && (
-              <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white" 
+              <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white shadow-md" 
                    style={{ backgroundColor: selectedColor }}></div>
             )}
           </div>
@@ -75,7 +85,6 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
             {selectedColor && (
               <button 
                 onClick={() => {
-                  setSelectedColor(null);
                   if (onColorSelect) onColorSelect(null);
                 }}
                 className="text-white text-xs bg-red-500 hover:bg-red-600 px-2 py-1 rounded transition-colors"
@@ -97,7 +106,7 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
               >
                 <div
                   className={`w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full border-2 shadow-md hover:scale-110 transition-transform duration-300 ${
-                    selectedColor === item.hex ? "border-yellow-400 ring-2 ring-yellow-300" : "border-white"
+                    selectedColor === item.hex ? "border-yellow-400 ring-2 ring-yellow-300 scale-110" : "border-white"
                   }`}
                   style={{ backgroundColor: item.hex }}
                 ></div>
@@ -118,6 +127,9 @@ const WarnaKulitPipi = ({ onColorSelect }) => {
         .no-scrollbar {
           -ms-overflow-style: none;
           scrollbar-width: none;
+        }
+        .text-shadow {
+          text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
         }
       `}</style>
     </div>
