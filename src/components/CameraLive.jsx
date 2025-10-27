@@ -3,9 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaKulitPipi from "./WarnaKulitPipi";
 import WarnaLipstik from "./WarnaLipstik";
-import { processLiveFrame, captureVideoFrame } from "../Api";
-
-const API_URL = "https://backendmakeover-production.up.railway.app";
+import { processLiveFrame } from "../Api";
 
 const CameraLive = () => {
   const navigate = useNavigate(); 
@@ -20,20 +18,19 @@ const CameraLive = () => {
   const [stream, setStream] = useState(null);
   const [backendStatus, setBackendStatus] = useState("unknown");
   
-  // Refs untuk state yang sering berubah
+  // Refs untuk menghindari infinite loop
   const processingRef = useRef(false);
   const selectedCheekColorRef = useRef(selectedCheekColor);
   const selectedLipstickColorRef = useRef(selectedLipstickColor);
-  const animationFrameRef = useRef(null);
-  const lastProcessTimeRef = useRef(0);
-  const effectsActiveRef = useRef(false);
 
   // Sync refs dengan state
   useEffect(() => {
     selectedCheekColorRef.current = selectedCheekColor;
+  }, [selectedCheekColor]);
+
+  useEffect(() => {
     selectedLipstickColorRef.current = selectedLipstickColor;
-    effectsActiveRef.current = !!(selectedCheekColor || selectedLipstickColor);
-  }, [selectedCheekColor, selectedLipstickColor]);
+  }, [selectedLipstickColor]);
 
   // Check backend status
   useEffect(() => {
@@ -42,7 +39,7 @@ const CameraLive = () => {
 
   const checkBackendStatus = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/health`);
+      const response = await fetch("https://backendmakeover-production.up.railway.app/api/health");
       const data = await response.json();
       setBackendStatus(data.mediapipe_available ? "healthy" : "limited");
     } catch (error) {
@@ -55,18 +52,13 @@ const CameraLive = () => {
     const currentCheekColor = selectedCheekColorRef.current;
     const currentLipstickColor = selectedLipstickColorRef.current;
 
-    // Jika tidak ada warna yang dipilih, return frame asli
     if (!currentCheekColor && !currentLipstickColor) {
-      return {
-        success: true,
-        processed_image: frameData,
-        effects_applied: false
-      };
+      return frameData;
     }
 
     // Prevent multiple simultaneous processing
     if (processingRef.current) {
-      return null;
+      return frameData;
     }
 
     try {
@@ -74,36 +66,80 @@ const CameraLive = () => {
       setIsProcessing(true);
       
       const result = await processLiveFrame(frameData, currentCheekColor, currentLipstickColor);
-      return result;
+      return result.processed_image;
       
     } catch (error) {
       console.error('Error processing frame:', error);
-      return {
-        success: true,
-        processed_image: frameData,
-        effects_applied: false
-      };
+      return applySimpleColorOverlay(frameData, currentCheekColor, currentLipstickColor);
     } finally {
       processingRef.current = false;
       setIsProcessing(false);
     }
   }, []);
 
+  // Simple local color overlay sebagai fallback
+  const applySimpleColorOverlay = (frameData, cheekColor, lipstickColor) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.drawImage(img, 0, 0);
+        
+        if (cheekColor) {
+          ctx.fillStyle = cheekColor + '30';
+          ctx.globalCompositeOperation = 'color';
+          
+          const cheekWidth = canvas.width * 0.3;
+          const cheekHeight = canvas.height * 0.2;
+          const cheekTop = canvas.height * 0.4;
+          
+          ctx.fillRect(canvas.width * 0.1, cheekTop, cheekWidth, cheekHeight);
+          ctx.fillRect(canvas.width * 0.6, cheekTop, cheekWidth, cheekHeight);
+        }
+        
+        if (lipstickColor) {
+          ctx.fillStyle = lipstickColor + '50';
+          ctx.globalCompositeOperation = 'color';
+          
+          const lipWidth = canvas.width * 0.4;
+          const lipHeight = canvas.height * 0.1;
+          const lipTop = canvas.height * 0.65;
+          
+          ctx.fillRect((canvas.width - lipWidth) / 2, lipTop, lipWidth, lipHeight);
+        }
+        
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = frameData;
+    });
+  };
+
   const captureAndProcessFrame = useCallback(async () => {
     if (!videoRef.current || !isCameraOn || processingRef.current) return;
 
     try {
-      const frameData = captureVideoFrame(videoRef.current, 0.8);
-      const result = await processFrame(frameData);
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
       
-      if (result && canvasRef.current) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const frameData = canvas.toDataURL('image/jpeg', 0.8);
+      
+      const processedFrame = await processFrame(frameData);
+      
+      if (canvasRef.current && processedFrame) {
         const displayCtx = canvasRef.current.getContext('2d');
         const img = new Image();
         img.onload = () => {
           displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
           displayCtx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
         };
-        img.src = result.processed_image;
+        img.src = processedFrame;
       }
     } catch (error) {
       console.error('Error in captureAndProcessFrame:', error);
@@ -146,12 +182,6 @@ const CameraLive = () => {
   };
 
   const closeCamera = () => {
-    // Stop animation frame
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
       setStream(null);
@@ -162,34 +192,35 @@ const CameraLive = () => {
     setIsCameraOn(false);
   };
 
-  // OPTIMIZED: Processing loop yang lebih efisien
+  // FIXED: Processing loop dengan kontrol yang lebih baik
   useEffect(() => {
-    const processLoop = () => {
+    let animationFrameId;
+    let lastProcessTime = 0;
+    const PROCESS_INTERVAL = 500; // Process every 500ms (lebih lambat)
+
+    const processLoop = (currentTime) => {
       if (!isCameraOn) {
+        cancelAnimationFrame(animationFrameId);
         return;
       }
 
-      const hasColorEffect = effectsActiveRef.current;
-      const now = Date.now();
+      const hasColorEffect = selectedCheekColorRef.current || selectedLipstickColorRef.current;
       
-      if (hasColorEffect) {
-        // Jika ada efek, process dengan interval yang lebih longgar
-        if (now - lastProcessTimeRef.current > 500) { // 2 FPS maksimal
-          captureAndProcessFrame();
-          lastProcessTimeRef.current = now;
-        }
+      if (hasColorEffect && (currentTime - lastProcessTime > PROCESS_INTERVAL)) {
+        captureAndProcessFrame();
+        lastProcessTime = currentTime;
       }
       
-      animationFrameRef.current = requestAnimationFrame(processLoop);
+      animationFrameId = requestAnimationFrame(processLoop);
     };
 
     if (isCameraOn) {
-      animationFrameRef.current = requestAnimationFrame(processLoop);
+      animationFrameId = requestAnimationFrame(processLoop);
     }
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
       }
     };
   }, [isCameraOn, captureAndProcessFrame]);
@@ -198,7 +229,6 @@ const CameraLive = () => {
     if (!isCameraOn) return;
 
     try {
-      // Capture frame terakhir dengan efek
       await captureAndProcessFrame();
       setCapturedPhoto(true);
       
@@ -237,7 +267,7 @@ const CameraLive = () => {
     }
   };
 
-  // Debounced color selection
+  // FIXED: Debounced color selection
   const handleCheekColorSelect = useCallback((colorHex) => {
     setSelectedCheekColor(colorHex);
   }, []);
@@ -249,11 +279,6 @@ const CameraLive = () => {
   const handleRetakePhoto = () => {
     setCapturedPhoto(false);
     handleToggleCamera();
-  };
-
-  const handleClearEffects = () => {
-    setSelectedCheekColor(null);
-    setSelectedLipstickColor(null);
   };
 
   return (
@@ -296,7 +321,7 @@ const CameraLive = () => {
           <video 
             ref={videoRef} 
             className={`w-full h-full object-cover transition-opacity duration-300 ${
-              capturedPhoto || (selectedCheekColor || selectedLipstickColor) ? 'opacity-0' : 'opacity-100'
+              capturedPhoto ? 'opacity-0' : 'opacity-100'
             }`}
             autoPlay 
             muted
@@ -306,7 +331,7 @@ const CameraLive = () => {
           <canvas
             ref={canvasRef}
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-              capturedPhoto || (selectedCheekColor || selectedLipstickColor) ? 'opacity-100' : 'opacity-0'
+              capturedPhoto ? 'opacity-100' : 'opacity-0'
             }`}
           />
 
@@ -344,7 +369,7 @@ const CameraLive = () => {
           </div>
 
           {/* COLOR SELECTORS - BOTTOM */}
-          {isCameraOn && (
+          {isCameraOn && !capturedPhoto && (
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-[95%] max-w-3xl flex flex-col md:flex-row gap-3 md:gap-4 z-10">
               <div className="flex-1 min-w-0">
                 <WarnaKulitPipi onColorSelect={handleCheekColorSelect} />
@@ -361,7 +386,7 @@ const CameraLive = () => {
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-white text-lg font-semibold">Applying Effects...</span>
+                <span className="text-white text-lg font-semibold">Processing...</span>
               </div>
             </div>
           )}
@@ -400,16 +425,6 @@ const CameraLive = () => {
             <i className="bx bx-camera text-xl"></i>
             Take Photo
           </button>
-
-          {(selectedCheekColor || selectedLipstickColor) && (
-            <button
-              onClick={handleClearEffects}
-              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-2xl font-semibold shadow-lg transition-all duration-300 hover:scale-105 text-base md:text-lg min-w-[200px] justify-center"
-            >
-              <i className="bx bx-reset text-xl"></i>
-              Clear Effects
-            </button>
-          )}
         </div>
 
         {/* SELECTED COLORS DISPLAY */}
