@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaKulitPipi from "./WarnaKulitPipi";
 import WarnaLipstik from "./WarnaLipstik";
-import Api from '../Api';
 
 const CameraLive = () => {
   const navigate = useNavigate(); 
@@ -16,19 +15,19 @@ const CameraLive = () => {
   const [selectedLipstickColor, setSelectedLipstickColor] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [stream, setStream] = useState(null);
+  const [useFallback, setUseFallback] = useState(false);
 
-  // API URL untuk live processing
-  const LIVE_PROCESSING_URL = "https://backendmakeover-production.up.railway.app/api/process-live-frame";
+  const API_URL = "https://backendmakeover-production.up.railway.app";
 
   const processFrame = useCallback(async (frameData) => {
     if (!selectedCheekColor && !selectedLipstickColor) {
-      return frameData; // Return original jika tidak ada efek
+      return frameData;
     }
 
     try {
       setIsProcessing(true);
       
-      const response = await fetch(LIVE_PROCESSING_URL, {
+      const response = await fetch(`${API_URL}/api/process-live-frame`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,11 +47,47 @@ const CameraLive = () => {
       return data.processed_image;
     } catch (error) {
       console.error('Error processing frame:', error);
-      return frameData; // Return original jika error
+      
+      // Fallback: apply simple color overlay locally
+      if (useFallback) {
+        return applyLocalColorEffect(frameData, selectedCheekColor, selectedLipstickColor);
+      }
+      
+      return frameData;
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedCheekColor, selectedLipstickColor]);
+  }, [selectedCheekColor, selectedLipstickColor, useFallback]);
+
+  // Simple local color effect sebagai fallback
+  const applyLocalColorEffect = (frameData, cheekColor, lipstickColor) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        
+        // Draw original image
+        ctx.drawImage(img, 0, 0);
+        
+        // Apply simple color overlay (basic implementation)
+        if (cheekColor) {
+          ctx.fillStyle = cheekColor + '40'; // Add transparency
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        if (lipstickColor) {
+          ctx.fillStyle = lipstickColor + '60';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = frameData;
+    });
+  };
 
   const captureAndProcessFrame = useCallback(async () => {
     if (!videoRef.current || !isCameraOn) return;
@@ -63,16 +98,11 @@ const CameraLive = () => {
       canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext('2d');
       
-      // Draw current video frame
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      
-      // Convert to base64
       const frameData = canvas.toDataURL('image/jpeg', 0.8);
       
-      // Process frame dengan efek
       const processedFrame = await processFrame(frameData);
       
-      // Update canvas display dengan frame yang sudah diproses
       if (canvasRef.current) {
         const displayCtx = canvasRef.current.getContext('2d');
         const img = new Image();
@@ -94,19 +124,24 @@ const CameraLive = () => {
         const userStream = await navigator.mediaDevices.getUserMedia({
           video: { 
             facingMode,
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 640 },
+            height: { ideal: 480 }
           },
         });
         
         videoRef.current.srcObject = userStream;
         setStream(userStream);
         
-        // Tunggu video ready
         videoRef.current.onloadedmetadata = () => {
           videoRef.current.play();
           setIsCameraOn(true);
           setCapturedPhoto(false);
+          
+          // Setup canvas size
+          if (canvasRef.current) {
+            canvasRef.current.width = videoRef.current.videoWidth;
+            canvasRef.current.height = videoRef.current.videoHeight;
+          }
         };
 
       } catch (err) {
@@ -127,19 +162,24 @@ const CameraLive = () => {
     setIsCameraOn(false);
   };
 
-  // Processing loop dengan useEffect
+  // Processing loop
   useEffect(() => {
     let animationFrameId;
+    let lastProcessTime = 0;
+    const PROCESS_INTERVAL = 200; // Process every 200ms untuk mengurangi load
 
-    const processLoop = () => {
+    const processLoop = (currentTime) => {
       if (isCameraOn && (selectedCheekColor || selectedLipstickColor)) {
-        captureAndProcessFrame();
+        if (currentTime - lastProcessTime > PROCESS_INTERVAL) {
+          captureAndProcessFrame();
+          lastProcessTime = currentTime;
+        }
       }
       animationFrameId = requestAnimationFrame(processLoop);
     };
 
     if (isCameraOn) {
-      processLoop();
+      animationFrameId = requestAnimationFrame(processLoop);
     }
 
     return () => {
@@ -153,11 +193,9 @@ const CameraLive = () => {
     if (!isCameraOn) return;
 
     try {
-      // Capture final photo dengan efek
       await captureAndProcessFrame();
       setCapturedPhoto(true);
       
-      // Matikan kamera setelah foto diambil
       setTimeout(() => {
         closeCamera();
       }, 100);
@@ -172,7 +210,6 @@ const CameraLive = () => {
 
     if (!isCameraOn) return;
 
-    // Close current stream
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
     }
@@ -181,8 +218,8 @@ const CameraLive = () => {
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: newFacingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { ideal: 640 },
+          height: { ideal: 480 }
         },
       });
       
@@ -207,6 +244,11 @@ const CameraLive = () => {
     handleToggleCamera();
   };
 
+  const enableFallbackMode = () => {
+    setUseFallback(true);
+    alert("Menggunakan mode fallback - efek mungkin kurang presisi");
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-900 to-black text-white overflow-hidden">
       {/* NAVBAR */}
@@ -226,9 +268,17 @@ const CameraLive = () => {
 
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-6">
+        {/* FALLBACK WARNING */}
+        {useFallback && (
+          <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-3 text-center">
+            <p className="text-yellow-300 text-sm">
+              Menggunakan mode fallback - efek warna dasar saja
+            </p>
+          </div>
+        )}
+
         {/* CAMERA CONTAINER */}
         <div className="relative w-full max-w-4xl aspect-[4/3] bg-black rounded-3xl border-4 border-white/30 shadow-2xl overflow-hidden">
-          {/* Video element untuk capture */}
           <video 
             ref={videoRef} 
             className={`w-full h-full object-cover transition-opacity duration-300 ${
@@ -239,7 +289,6 @@ const CameraLive = () => {
             playsInline
           />
           
-          {/* Canvas untuk display processed frame */}
           <canvas
             ref={canvasRef}
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
@@ -250,13 +299,23 @@ const CameraLive = () => {
           {/* ICONS TOP RIGHT */}
           <div className="absolute top-4 right-4 flex items-center gap-3 z-10">
             {!capturedPhoto && isCameraOn && (
-              <button
-                className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-xl hover:bg-white hover:text-black transition-all duration-300 shadow-lg backdrop-blur-sm"
-                title="Switch Camera"
-                onClick={handleSwitchCamera}
-              >
-                <i className="bx bx-refresh"></i>
-              </button>
+              <>
+                <button
+                  className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-xl hover:bg-white hover:text-black transition-all duration-300 shadow-lg backdrop-blur-sm"
+                  title="Switch Camera"
+                  onClick={handleSwitchCamera}
+                >
+                  <i className="bx bx-refresh"></i>
+                </button>
+                
+                <button
+                  className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-yellow-500/80 bg-yellow-500/50 text-white text-xl hover:bg-yellow-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
+                  title="Enable Fallback Mode"
+                  onClick={enableFallbackMode}
+                >
+                  <i className="bx bx-error"></i>
+                </button>
+              </>
             )}
 
             {capturedPhoto && (
@@ -283,12 +342,10 @@ const CameraLive = () => {
           {/* COLOR SELECTORS - BOTTOM */}
           {isCameraOn && !capturedPhoto && (
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-[95%] max-w-3xl flex flex-col md:flex-row gap-3 md:gap-4 z-10">
-              {/* WARNA KULIT PIPI */}
               <div className="flex-1 min-w-0">
                 <WarnaKulitPipi onColorSelect={handleCheekColorSelect} />
               </div>
 
-              {/* WARNA LIPSTIK */}
               <div className="flex-1 min-w-0">
                 <WarnaLipstik onColorSelect={handleLipstickColorSelect} />
               </div>
