@@ -74,15 +74,20 @@ export const resetToOriginal = async (sessionId) => {
 
 export const processLiveFrame = async (imageData, cheekColor = null, lipstickColor = null) => {
   try {
-    const response = await axios.post(`${API_URL}/api/process-live-frame`, {
-      image: imageData,
-      cheek_color: cheekColor,
-      lipstick_color: lipstickColor
-    }, {
+    const formData = new FormData();
+    formData.append("image_data", imageData);
+    if (cheekColor) {
+      formData.append("cheek_color", cheekColor);
+    }
+    if (lipstickColor) {
+      formData.append("lipstick_color", lipstickColor);
+    }
+    
+    const response = await axios.post(`${API_URL}/api/process-live-frame`, formData, {
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "multipart/form-data",
       },
-      timeout: 15000, // 15 second timeout untuk live processing
+      timeout: 10000,
     });
     return response.data;
   } catch (error) {
@@ -181,3 +186,4 @@ export const captureVideoFrame = (videoElement, quality = 0.8) => {
   ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL('image/jpeg', quality);
 };
+
