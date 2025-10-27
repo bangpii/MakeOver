@@ -2,12 +2,6 @@ import axios from "axios";
 
 const API_URL = "https://backendmakeover-production.up.railway.app";
 
-// Buat instance axios dengan timeout yang lebih pendek untuk live processing
-const liveApi = axios.create({
-  baseURL: API_URL,
-  timeout: 8000, // 8 second timeout untuk live processing
-});
-
 export const getHello = async () => {
   try {
     const response = await axios.get(`${API_URL}/api/hello`);
@@ -76,25 +70,7 @@ export const resetToOriginal = async (sessionId) => {
   }
 };
 
-// ========== TAMBAHAN BARU UNTUK LIVE CAMERA PROCESSING ==========
-
-export const processLiveFrame = async (imageData, cheekColor = null, lipstickColor = null) => {
-  try {
-    const response = await liveApi.post('/api/process-live-frame', {
-      image: imageData,
-      cheek_color: cheekColor,
-      lipstick_color: lipstickColor
-    }, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    return response.data;
-  } catch (error) {
-    console.error("Error processing live frame:", error);
-    throw error;
-  }
-};
+// ========== FUNGSI UNTUK APLIKASI BLUSH DAN LIPSTICK ==========
 
 export const applyCheekColor = async (imageFile, cheekHex, sessionId = null) => {
   try {
