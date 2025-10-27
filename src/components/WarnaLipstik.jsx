@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState } from "react";
 
 const WarnaLipstik = ({ onColorSelect }) => {
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -6,44 +6,37 @@ const WarnaLipstik = ({ onColorSelect }) => {
 
   const warna = {
     WarnaLipstik: [
-      { name: "New Rules", hex: "#D7263D" },
-      { name: "Feisty", hex: "#FF4F79" },
-      { name: "Iconic", hex: "#B80049" },
-      { name: "Fame", hex: "#FF6F91" },
-      { name: "Authentic", hex: "#C23B22" },
-      { name: "Pleasure", hex: "#FF8DAA" },
-      { name: "Skye-hi", hex: "#9B59B6" },
-      { name: "Cream", hex: "#FFDAB9" },
-      { name: "Pink", hex: "#FFB6C1" },
-      { name: "Plum Red", hex: "#8E4585" },
+      { name: "New Rules", hex: "#D7263D" },     // merah cerah
+      { name: "Feisty", hex: "#FF4F79" },        // pink fuchsia
+      { name: "Iconic", hex: "#B80049" },        // merah tua
+      { name: "Fame", hex: "#FF6F91" },          // pink lembut
+      { name: "Authentic", hex: "#C23B22" },     // merah bata
+      { name: "Pleasure", hex: "#FF8DAA" },      // pink peach
+      { name: "Skye-hi", hex: "#9B59B6" },       // ungu muda
+      { name: "Cream", hex: "#FFDAB9" },         // cream/peach lembut
+      { name: "Pink", hex: "#FFB6C1" },          // soft pink
+      { name: "Plum Red", hex: "#8E4585" },      // plum
     ],
   };
 
-  const handleColorClick = useCallback((item) => {
+  const handleColorClick = (item) => {
     setSelectedColor(item.hex);
     if (onColorSelect) {
       onColorSelect(item.hex);
     }
-  }, [onColorSelect]);
+  };
 
-  const handleCategoryClick = useCallback((key) => {
+  const handleCategoryClick = (key) => {
     if (selectedCategory === key) {
       setSelectedCategory(null);
       setSelectedColor(null);
       if (onColorSelect) {
-        onColorSelect(null);
+        onColorSelect(null); // Reset color ketika kategori ditutup
       }
     } else {
       setSelectedCategory(key);
     }
-  }, [selectedCategory, onColorSelect]);
-
-  const handleClearColor = useCallback(() => {
-    setSelectedColor(null);
-    if (onColorSelect) {
-      onColorSelect(null);
-    }
-  }, [onColorSelect]);
+  };
   
   return (
     <div className="w-full p-1 sm:p-2 md:p-4 lg:p-6 text-center">
@@ -59,7 +52,7 @@ const WarnaLipstik = ({ onColorSelect }) => {
           >
             <img
               src="/lipstick.png"
-              alt="Lipstick"
+              alt="Background"
               className="absolute inset-0 w-full h-full object-cover opacity-70 hover:opacity-90 transition-opacity duration-300 rounded-xl sm:rounded-2xl"
             />
             {selectedColor && selectedCategory === key && (
@@ -77,7 +70,10 @@ const WarnaLipstik = ({ onColorSelect }) => {
             <span className="text-white text-xs font-semibold">Pilih Warna Lipstik:</span>
             {selectedColor && (
               <button 
-                onClick={handleClearColor}
+                onClick={() => {
+                  setSelectedColor(null);
+                  if (onColorSelect) onColorSelect(null);
+                }}
                 className="text-white text-xs bg-red-500 hover:bg-red-600 px-2 py-1 rounded transition-colors"
               >
                 Clear
@@ -85,7 +81,8 @@ const WarnaLipstik = ({ onColorSelect }) => {
             )}
           </div>
           <div
-            className="flex flex-wrap gap-1 sm:gap-2 md:gap-3 justify-center"
+            className="flex flex-wrap md:flex-nowrap gap-1 sm:gap-2 md:gap-3 justify-center md:justify-start overflow-x-auto no-scrollbar"
+            tabIndex={0}
           >
             {warna[selectedCategory].map((item, i) => (
               <div
@@ -96,7 +93,7 @@ const WarnaLipstik = ({ onColorSelect }) => {
               >
                 <div
                   className={`w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full border-2 shadow-md hover:scale-110 transition-transform duration-300 ${
-                    selectedColor === item.hex ? "border-yellow-400 ring-2 ring-yellow-300 scale-110" : "border-white"
+                    selectedColor === item.hex ? "border-yellow-400 ring-2 ring-yellow-300" : "border-white"
                   }`}
                   style={{ backgroundColor: item.hex }}
                 ></div>
@@ -123,4 +120,4 @@ const WarnaLipstik = ({ onColorSelect }) => {
   );
 };
 
-export default React.memo(WarnaLipstik);
+export default WarnaLipstik;
