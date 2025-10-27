@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaKulitPipi from "./WarnaKulitPipi";
 import WarnaLipstik from "./WarnaLipstik";
+import { processLiveFrame } from "../Api"; // IMPORT FUNGSI DARI API.JS
 
 const CameraLive = () => {
   const navigate = useNavigate(); 
@@ -15,9 +16,23 @@ const CameraLive = () => {
   const [selectedLipstickColor, setSelectedLipstickColor] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [stream, setStream] = useState(null);
-  const [useFallback, setUseFallback] = useState(false);
+  const [backendStatus, setBackendStatus] = useState("unknown");
 
-  const API_URL = "https://backendmakeover-production.up.railway.app";
+  // Check backend status on component mount
+  useEffect(() => {
+    checkBackendStatus();
+  }, []);
+
+  const checkBackendStatus = async () => {
+    try {
+      const response = await fetch("https://backendmakeover-production.up.railway.app/api/health");
+      const data = await response.json();
+      setBackendStatus(data.mediapipe_available ? "healthy" : "limited");
+    } catch (error) {
+      console.error("Backend health check failed:", error);
+      setBackendStatus("offline");
+    }
+  };
 
   const processFrame = useCallback(async (frameData) => {
     if (!selectedCheekColor && !selectedLipstickColor) {
@@ -27,40 +42,22 @@ const CameraLive = () => {
     try {
       setIsProcessing(true);
       
-      const response = await fetch(`${API_URL}/api/process-live-frame`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          image: frameData,
-          cheek_color: selectedCheekColor,
-          lipstick_color: selectedLipstickColor
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Processing failed');
-      }
-
-      const data = await response.json();
-      return data.processed_image;
+      // GUNAKAN FUNGSI DARI API.JS
+      const result = await processLiveFrame(frameData, selectedCheekColor, selectedLipstickColor);
+      return result.processed_image;
+      
     } catch (error) {
       console.error('Error processing frame:', error);
       
-      // Fallback: apply simple color overlay locally
-      if (useFallback) {
-        return applyLocalColorEffect(frameData, selectedCheekColor, selectedLipstickColor);
-      }
-      
-      return frameData;
+      // Fallback ke efek lokal yang sederhana
+      return applySimpleColorOverlay(frameData, selectedCheekColor, selectedLipstickColor);
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedCheekColor, selectedLipstickColor, useFallback]);
+  }, [selectedCheekColor, selectedLipstickColor]);
 
-  // Simple local color effect sebagai fallback
-  const applyLocalColorEffect = (frameData, cheekColor, lipstickColor) => {
+  // Simple local color overlay sebagai fallback
+  const applySimpleColorOverlay = (frameData, cheekColor, lipstickColor) => {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -72,15 +69,33 @@ const CameraLive = () => {
         // Draw original image
         ctx.drawImage(img, 0, 0);
         
-        // Apply simple color overlay (basic implementation)
+        // Apply cheek color as overlay
         if (cheekColor) {
-          ctx.fillStyle = cheekColor + '40'; // Add transparency
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = cheekColor + '30'; // Add transparency
+          ctx.globalCompositeOperation = 'color';
+          
+          // Simple cheek areas
+          const cheekWidth = canvas.width * 0.3;
+          const cheekHeight = canvas.height * 0.2;
+          const cheekTop = canvas.height * 0.4;
+          
+          // Left cheek
+          ctx.fillRect(canvas.width * 0.1, cheekTop, cheekWidth, cheekHeight);
+          // Right cheek
+          ctx.fillRect(canvas.width * 0.6, cheekTop, cheekWidth, cheekHeight);
         }
         
+        // Apply lipstick color as overlay
         if (lipstickColor) {
-          ctx.fillStyle = lipstickColor + '60';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = lipstickColor + '50';
+          ctx.globalCompositeOperation = 'color';
+          
+          // Simple lip area
+          const lipWidth = canvas.width * 0.4;
+          const lipHeight = canvas.height * 0.1;
+          const lipTop = canvas.height * 0.65;
+          
+          ctx.fillRect((canvas.width - lipWidth) / 2, lipTop, lipWidth, lipHeight);
         }
         
         resolve(canvas.toDataURL('image/jpeg', 0.8));
@@ -162,11 +177,11 @@ const CameraLive = () => {
     setIsCameraOn(false);
   };
 
-  // Processing loop
+  // Processing loop dengan throttling
   useEffect(() => {
     let animationFrameId;
     let lastProcessTime = 0;
-    const PROCESS_INTERVAL = 200; // Process every 200ms untuk mengurangi load
+    const PROCESS_INTERVAL = 300; // Process every 300ms
 
     const processLoop = (currentTime) => {
       if (isCameraOn && (selectedCheekColor || selectedLipstickColor)) {
@@ -244,11 +259,6 @@ const CameraLive = () => {
     handleToggleCamera();
   };
 
-  const enableFallbackMode = () => {
-    setUseFallback(true);
-    alert("Menggunakan mode fallback - efek mungkin kurang presisi");
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-900 to-black text-white overflow-hidden">
       {/* NAVBAR */}
@@ -268,11 +278,18 @@ const CameraLive = () => {
 
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-6">
-        {/* FALLBACK WARNING */}
-        {useFallback && (
+        {/* BACKEND STATUS */}
+        {backendStatus === "limited" && (
           <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-3 text-center">
             <p className="text-yellow-300 text-sm">
-              Menggunakan mode fallback - efek warna dasar saja
+              Backend dalam mode terbatas - menggunakan efek dasar
+            </p>
+          </div>
+        )}
+        {backendStatus === "offline" && (
+          <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-center">
+            <p className="text-red-300 text-sm">
+              Backend offline - menggunakan efek lokal
             </p>
           </div>
         )}
@@ -299,23 +316,13 @@ const CameraLive = () => {
           {/* ICONS TOP RIGHT */}
           <div className="absolute top-4 right-4 flex items-center gap-3 z-10">
             {!capturedPhoto && isCameraOn && (
-              <>
-                <button
-                  className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-xl hover:bg-white hover:text-black transition-all duration-300 shadow-lg backdrop-blur-sm"
-                  title="Switch Camera"
-                  onClick={handleSwitchCamera}
-                >
-                  <i className="bx bx-refresh"></i>
-                </button>
-                
-                <button
-                  className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-yellow-500/80 bg-yellow-500/50 text-white text-xl hover:bg-yellow-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
-                  title="Enable Fallback Mode"
-                  onClick={enableFallbackMode}
-                >
-                  <i className="bx bx-error"></i>
-                </button>
-              </>
+              <button
+                className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-xl hover:bg-white hover:text-black transition-all duration-300 shadow-lg backdrop-blur-sm"
+                title="Switch Camera"
+                onClick={handleSwitchCamera}
+              >
+                <i className="bx bx-refresh"></i>
+              </button>
             )}
 
             {capturedPhoto && (
