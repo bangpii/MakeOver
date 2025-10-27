@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaKulitPipi from "./WarnaKulitPipi";
 import WarnaLipstik from "./WarnaLipstik";
-import { processLiveFrame } from "./api"; // Pastikan path ini benar
+import { processLiveFrame } from "../Api"; 
 
 const CameraLive = () => {
   const navigate = useNavigate(); 
