@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaKulitPipi from "./WarnaKulitPipi";
 import WarnaLipstik from "./WarnaLipstik";
-import { processLiveFrame } from "../Api"; 
 
 const CameraLive = () => {
   const navigate = useNavigate(); 
@@ -16,75 +15,76 @@ const CameraLive = () => {
   const [selectedLipstickColor, setSelectedLipstickColor] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [stream, setStream] = useState(null);
-  const processingRef = useRef(false);
+
+  // API URL untuk live processing
+  const LIVE_PROCESSING_URL = "https://backendmakeover-production.up.railway.app/api/process-live-frame";
 
   const processFrame = useCallback(async (frameData) => {
-    // Jika tidak ada efek yang dipilih, return original
     if (!selectedCheekColor && !selectedLipstickColor) {
-      return frameData;
-    }
-
-    // Prevent multiple simultaneous processing
-    if (processingRef.current) {
-      return frameData;
+      return frameData; // Return original jika tidak ada efek
     }
 
     try {
-      processingRef.current = true;
       setIsProcessing(true);
       
-      const response = await processLiveFrame(frameData, selectedCheekColor, selectedLipstickColor);
-      
-      if (response.success) {
-        return response.processed_image;
-      } else {
-        console.error('Processing failed:', response.error);
-        return frameData;
+      const response = await fetch(LIVE_PROCESSING_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: frameData,
+          cheek_color: selectedCheekColor,
+          lipstick_color: selectedLipstickColor
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Processing failed');
       }
+
+      const data = await response.json();
+      return data.processed_image;
     } catch (error) {
       console.error('Error processing frame:', error);
-      return frameData;
+      return frameData; // Return original jika error
     } finally {
-      processingRef.current = false;
       setIsProcessing(false);
     }
   }, [selectedCheekColor, selectedLipstickColor]);
 
   const captureAndProcessFrame = useCallback(async () => {
-    if (!videoRef.current || !isCameraOn || processingRef.current) return;
+    if (!videoRef.current || !isCameraOn) return;
 
     try {
       const canvas = document.createElement('canvas');
-      const video = videoRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext('2d');
       
       // Draw current video frame
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       
       // Convert to base64
-      const frameData = canvas.toDataURL('image/jpeg', 0.7);
+      const frameData = canvas.toDataURL('image/jpeg', 0.8);
       
-      // Only process if effects are selected
-      if (selectedCheekColor || selectedLipstickColor) {
-        const processedFrame = await processFrame(frameData);
-        
-        // Update canvas display dengan frame yang sudah diproses
-        if (canvasRef.current) {
-          const displayCtx = canvasRef.current.getContext('2d');
-          const img = new Image();
-          img.onload = () => {
-            displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-            displayCtx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
-          };
-          img.src = processedFrame;
-        }
+      // Process frame dengan efek
+      const processedFrame = await processFrame(frameData);
+      
+      // Update canvas display dengan frame yang sudah diproses
+      if (canvasRef.current) {
+        const displayCtx = canvasRef.current.getContext('2d');
+        const img = new Image();
+        img.onload = () => {
+          displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+          displayCtx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
+        };
+        img.src = processedFrame;
       }
     } catch (error) {
       console.error('Error in captureAndProcessFrame:', error);
     }
-  }, [isCameraOn, selectedCheekColor, selectedLipstickColor, processFrame]);
+  }, [isCameraOn, processFrame]);
 
   // Setup video stream
   const handleToggleCamera = async () => {
@@ -93,24 +93,19 @@ const CameraLive = () => {
         const userStream = await navigator.mediaDevices.getUserMedia({
           video: { 
             facingMode,
-            width: { ideal: 640 }, // Reduced for better performance
-            height: { ideal: 480 }
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
           },
         });
         
         videoRef.current.srcObject = userStream;
         setStream(userStream);
         
+        // Tunggu video ready
         videoRef.current.onloadedmetadata = () => {
           videoRef.current.play();
           setIsCameraOn(true);
           setCapturedPhoto(false);
-          
-          // Setup canvas size
-          if (canvasRef.current) {
-            canvasRef.current.width = videoRef.current.videoWidth;
-            canvasRef.current.height = videoRef.current.videoHeight;
-          }
         };
 
       } catch (err) {
@@ -127,31 +122,22 @@ const CameraLive = () => {
       stream.getTracks().forEach((track) => track.stop());
       setStream(null);
     }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    videoRef.current.srcObject = null;
     setIsCameraOn(false);
-    setSelectedCheekColor(null);
-    setSelectedLipstickColor(null);
   };
 
-  // Optimized processing loop
+  // Processing loop dengan useEffect
   useEffect(() => {
     let animationFrameId;
-    let lastProcessTime = 0;
-    const PROCESS_INTERVAL = 100; // Process every 100ms for better performance
 
-    const processLoop = (timestamp) => {
+    const processLoop = () => {
       if (isCameraOn && (selectedCheekColor || selectedLipstickColor)) {
-        if (timestamp - lastProcessTime > PROCESS_INTERVAL) {
-          captureAndProcessFrame();
-          lastProcessTime = timestamp;
-        }
+        captureAndProcessFrame();
       }
       animationFrameId = requestAnimationFrame(processLoop);
     };
 
-    if (isCameraOn && (selectedCheekColor || selectedLipstickColor)) {
+    if (isCameraOn) {
       processLoop();
     }
 
@@ -166,35 +152,9 @@ const CameraLive = () => {
     if (!isCameraOn) return;
 
     try {
-      setIsProcessing(true);
-      
-      const canvas = document.createElement('canvas');
-      const video = videoRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      const frameData = canvas.toDataURL('image/jpeg', 0.9);
-      
-      // Process final photo dengan efek
-      let finalPhoto = frameData;
-      if (selectedCheekColor || selectedLipstickColor) {
-        finalPhoto = await processFrame(frameData);
-      }
-      
-      // Display processed photo
-      if (canvasRef.current) {
-        const displayCtx = canvasRef.current.getContext('2d');
-        const img = new Image();
-        img.onload = () => {
-          displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-          displayCtx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
-          setCapturedPhoto(true);
-          setIsProcessing(false);
-        };
-        img.src = finalPhoto;
-      }
+      // Capture final photo dengan efek
+      await captureAndProcessFrame();
+      setCapturedPhoto(true);
       
       // Matikan kamera setelah foto diambil
       setTimeout(() => {
@@ -202,7 +162,6 @@ const CameraLive = () => {
       }, 100);
     } catch (error) {
       console.error('Error taking photo:', error);
-      setIsProcessing(false);
     }
   };
 
@@ -221,23 +180,14 @@ const CameraLive = () => {
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: newFacingMode,
-          width: { ideal: 640 },
-          height: { ideal: 480 }
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
         },
       });
       
       videoRef.current.srcObject = newStream;
       setStream(newStream);
-      
-      videoRef.current.onloadedmetadata = () => {
-        videoRef.current.play();
-        
-        // Update canvas size
-        if (canvasRef.current) {
-          canvasRef.current.width = videoRef.current.videoWidth;
-          canvasRef.current.height = videoRef.current.videoHeight;
-        }
-      };
+      videoRef.current.play();
     } catch (err) {
       console.error("Gagal switch kamera:", err);
     }
@@ -253,19 +203,8 @@ const CameraLive = () => {
 
   const handleRetakePhoto = () => {
     setCapturedPhoto(false);
-    setSelectedCheekColor(null);
-    setSelectedLipstickColor(null);
     handleToggleCamera();
   };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-    };
-  }, [stream]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-900 to-black text-white overflow-hidden">
@@ -389,15 +328,15 @@ const CameraLive = () => {
 
           <button
             onClick={handleTakePhoto}
-            disabled={!isCameraOn || isProcessing}
-            className={`flex items-center gap-2 px-8 py-4 rounded-2xl font-semibold shadow-lg transition-all duration-300 text-base md:text-lg min-w-[200px] justify-center ${
-              isCameraOn && !isProcessing
-                ? "bg-green-600 hover:bg-green-700 text-white hover:scale-105" 
+            disabled={!isCameraOn}
+            className={`flex items-center gap-2 px-8 py-4 rounded-2xl font-semibold shadow-lg transition-all duration-300 hover:scale-105 text-base md:text-lg min-w-[200px] justify-center ${
+              isCameraOn 
+                ? "bg-green-600 hover:bg-green-700 text-white" 
                 : "bg-gray-600 text-gray-300 cursor-not-allowed"
             }`}
           >
             <i className="bx bx-camera text-xl"></i>
-            {isProcessing ? "Processing..." : "Take Photo"}
+            Take Photo
           </button>
         </div>
 
