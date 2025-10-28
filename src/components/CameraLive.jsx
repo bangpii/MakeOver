@@ -398,13 +398,13 @@ const CameraLive = () => {
   return (
     <div className="min-h-screen flex flex-col bg-black text-white overflow-hidden">
       {/* NAVBAR */}
-      <nav className="bg-white backdrop-blur-md border-b border-white  flex items-center justify-between px-4 md:px-8 py-4 shadow-lg">
+      <nav className="bg-white backdrop-blur-md border-b border-white flex items-center justify-between px-4 md:px-8 py-4 shadow-lg">
         <h1 className="text-xl text-black md:text-3xl font-black tracking-widest">
           Live <span className="text-pink-500">Camera</span>
         </h1>
 
         <button
-          className="text-2xl md:text-3xl hover:text-pink-500 transition-all duration-300 bg-white/10 hover:bg-white/20 p-2 rounded-full"
+          className="text-2xl md:text-3xl hover:text-pink-500 transition-all duration-300 bg-black hover:bg-white p-2 rounded-full"
           title="Back"
           onClick={() => navigate("/")}
         >
@@ -488,21 +488,25 @@ const CameraLive = () => {
             )}
           </div>
 
-          {/* COLOR SELECTORS - BOTTOM */}
+          {/* COLOR SELECTORS - BOTTOM - PERBAIKAN LAYOUT MOBILE */}
           {isCameraOn && !capturedPhoto && (
-            <div className="absolute bottom-2 md:bottom-4 left-1/2 transform -translate-x-1/2 w-[98%] max-w-3xl flex flex-col md:flex-row gap-2 md:gap-4 z-10">
-              <div className="flex-1 min-w-0">
-                <WarnaKulitPipi 
-                  onColorSelect={handleCheekColorSelect}
-                  selectedColor={selectedCheekColor}
-                />
-              </div>
+            <div className="absolute bottom-2 md:bottom-4 left-1/2 transform -translate-x-1/2 w-[95%] max-w-3xl z-10">
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
+                {/* Blush */}
+                <div className="bg-white/10 backdrop-blur-md rounded-xl md:rounded-2xl p-2 md:p-3 border border-white/20">
+                  <WarnaKulitPipi 
+                    onColorSelect={handleCheekColorSelect}
+                    selectedColor={selectedCheekColor}
+                  />
+                </div>
 
-              <div className="flex-1 min-w-0">
-                <WarnaLipstik 
-                  onColorSelect={handleLipstickColorSelect}
-                  selectedColor={selectedLipstickColor}
-                />
+                {/* Lipstick */}
+                <div className="bg-white/10 backdrop-blur-md rounded-xl md:rounded-2xl p-2 md:p-3 border border-white/20">
+                  <WarnaLipstik 
+                    onColorSelect={handleLipstickColorSelect}
+                    selectedColor={selectedLipstickColor}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -547,8 +551,6 @@ const CameraLive = () => {
         {isCameraOn && (
           <div className="bg-white/5 backdrop-blur-md rounded-xl md:rounded-2xl p-2 md:p-3 border border-white/10 w-full max-w-md">
             <div className="text-center text-white/70 text-xs md:text-sm">
-              <p>Frames Processed: {frameCounterRef.current}</p>
-              <p>Backend: {backendStatus === "healthy" ? "✅ Connected" : "❌ Offline"}</p>
               <p>Effects: {selectedCheekColor ? "Blush " : ""}{selectedLipstickColor ? "Lipstick" : "None"}</p>
             </div>
           </div>
