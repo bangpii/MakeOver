@@ -396,10 +396,10 @@ const CameraLive = () => {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-900 to-black text-white overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-black text-white overflow-hidden">
       {/* NAVBAR */}
-      <nav className="bg-white/10 backdrop-blur-md border-b border-white/20 flex items-center justify-between px-4 md:px-8 py-4 shadow-lg">
-        <h1 className="text-xl md:text-3xl font-black tracking-widest">
+      <nav className="bg-white backdrop-blur-md border-b border-white  flex items-center justify-between px-4 md:px-8 py-4 shadow-lg">
+        <h1 className="text-xl text-black md:text-3xl font-black tracking-widest">
           Live <span className="text-pink-500">Camera</span>
         </h1>
 
@@ -416,13 +416,6 @@ const CameraLive = () => {
       <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4 space-y-4 md:space-y-6">
         {/* BACKEND STATUS */}
         <div className="w-full max-w-4xl">
-          {backendStatus === "healthy" && (
-            <div className="bg-green-500/20 border border-green-500 rounded-lg p-2 md:p-3 text-center mb-3 md:mb-4">
-              <p className="text-green-300 text-xs md:text-sm">
-                ✅ Backend connected - Advanced face detection active
-              </p>
-            </div>
-          )}
           {backendStatus === "limited" && (
             <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-2 md:p-3 text-center mb-3 md:mb-4">
               <p className="text-yellow-300 text-xs md:text-sm">
