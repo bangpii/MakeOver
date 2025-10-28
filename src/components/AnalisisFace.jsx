@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import "boxicons/css/boxicons.min.css";
 import WarnaFoundation from "./WarnaFoundation";
 import { applyFoundation, uploadPhoto, resetToOriginal } from "../Api";
+import Animasi_Background from "./Animasi_Background";
+
 
 const AnalisisFace = () => {
   const navigate = useNavigate();
@@ -94,9 +96,14 @@ const AnalisisFace = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white overflow-hidden">
+    <div className="min-h-screen flex flex-col text-white overflow-hidden">
+
+      <div className="fixed inset-0 z-0">
+              <Animasi_Background/>
+            </div>
+
       {/* NAVBAR */}
-      <nav className="bg-white text-black flex items-center justify-between px-6 md:px-8 py-5 shadow-md">
+      <nav className="bg-white text-black flex items-center justify-between px-6 md:px-8 py-5 shadow-md z-10">
         <h1 className="text-2xl md:text-4xl font-black tracking-widest">
           Face <span className="text-pink-500">Analysis</span>
         </h1>
@@ -111,7 +118,7 @@ const AnalisisFace = () => {
       </nav>
 
       {/* CONTENT */}
-      <div className="flex-grow flex flex-col items-center justify-center text-center px-4 md:px-6 space-y-10 max-w-full overflow-hidden">
+      <div className="flex-grow z-10 flex flex-col items-center justify-center text-center px-4 md:px-6 space-y-10 max-w-full overflow-hidden">
         {/* AREA FOTO */}
         <div className="relative border-4 border-white rounded-3xl w-[95%] md:w-[850px] h-[400px] md:h-[550px] flex items-center justify-center shadow-2xl bg-black overflow-hidden">
           {isAnalyzing ? (
