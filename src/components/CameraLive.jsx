@@ -280,21 +280,33 @@ const CameraLive = () => {
     try {
       console.log("📸 Taking photo...");
       
-      // Capture current frame langsung dari video
+      // Capture frame langsung dari canvas yang udah ada efeknya
       const canvas = document.createElement('canvas');
       const video = videoRef.current;
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
+      
+      // Draw video frame dulu
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // Tampilkan hasil foto di canvas utama (overlay di atas video)
+      // Jika canvasRef ada gambar efek, draw di atas video frame
+      if (canvasRef.current) {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvasRef.current.width;
+        tempCanvas.height = canvasRef.current.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(canvasRef.current, 0, 0);
+        ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+      }
+      
+      // Tampilkan hasil foto di canvas utama
       const displayCtx = canvasRef.current.getContext('2d');
       displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       displayCtx.drawImage(canvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
       
       setCapturedPhoto(true);
-      console.log("✅ Photo captured successfully");
+      console.log("✅ Photo captured successfully with live effects");
       
     } catch (error) {
       console.error('❌ Error taking photo:', error);
@@ -359,7 +371,7 @@ const CameraLive = () => {
     setCapturedPhoto(false);
     lastProcessedFrameRef.current = null;
     
-    // Clear canvas untuk kembali ke live camera
+    // Clear canvas untuk kembali ke live camera dengan efek
     if (canvasRef.current) {
       const ctx = canvasRef.current.getContext('2d');
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -438,11 +450,11 @@ const CameraLive = () => {
             playsInline
           />
           
-          {/* Canvas Element - Untuk nampilin hasil foto */}
+          {/* Canvas Element - Overlay transparan di atas video */}
           <canvas
             ref={canvasRef}
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-              capturedPhoto ? 'opacity-100' : 'opacity-0'
+              capturedPhoto ? 'opacity-100' : (selectedCheekColor || selectedLipstickColor) ? 'opacity-100' : 'opacity-0'
             }`}
             style={{
               mixBlendMode: 'normal',
