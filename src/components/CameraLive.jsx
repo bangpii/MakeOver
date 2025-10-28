@@ -275,45 +275,26 @@ const CameraLive = () => {
   }, [isCameraOn, captureAndProcessFrame]);
 
   const handleTakePhoto = async () => {
-    if (!isCameraOn) return;
+    if (!isCameraOn || processingRef.current) return;
 
     try {
       console.log("📸 Taking photo...");
       
-      // Buat canvas untuk capture foto
-      const canvas = document.createElement('canvas');
-      const video = videoRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      
-      // Draw video frame ke canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Jika ada efek yang aktif, proses frame dengan efek
-      if (selectedCheekColor || selectedLipstickColor) {
-        const frameData = canvas.toDataURL('image/jpeg', 0.8);
-        const processedFrame = await processFrame(frameData);
-        
-        if (processedFrame) {
-          const img = new Image();
-          img.onload = () => {
-            // Clear canvas dan draw processed image
-            const displayCtx = canvasRef.current.getContext('2d');
-            displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-            displayCtx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
-            setCapturedPhoto(true);
-          };
-          img.src = processedFrame;
-          return;
+      // Tunggu proses terakhir selesai sebelum ambil foto
+      if (processingRef.current) {
+        console.log("⏳ Waiting for current processing to finish...");
+        let waitCount = 0;
+        while (processingRef.current && waitCount < 20) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          waitCount++;
         }
       }
       
-      // Jika tidak ada efek, langsung tampilkan frame asli
-      const displayCtx = canvasRef.current.getContext('2d');
-      displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      displayCtx.drawImage(canvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
+      // Capture final processed frame
+      await captureAndProcessFrame();
       setCapturedPhoto(true);
+      
+      console.log("✅ Photo captured successfully");
       
     } catch (error) {
       console.error('❌ Error taking photo:', error);
@@ -331,6 +312,7 @@ const CameraLive = () => {
     }
 
     try {
+      console.log(`🔄 Switching camera to: ${newFacingMode}`);
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: newFacingMode,
@@ -358,28 +340,24 @@ const CameraLive = () => {
 
   // Handler untuk pilihan warna
   const handleCheekColorSelect = useCallback((colorHex) => {
+    console.log(`🎨 Cheek color selected: ${colorHex}`);
     setSelectedCheekColor(colorHex);
     
     // Reset frame cache ketika warna berubah
     lastProcessedFrameRef.current = null;
     
-    // Force immediate processing untuk warna baru
-    if (isCameraOn) {
-      captureAndProcessFrame();
-    }
-  }, [isCameraOn, captureAndProcessFrame]);
+    // Processing loop akan otomatis melanjutkan karena hasColorEffect berubah
+  }, []);
 
   const handleLipstickColorSelect = useCallback((colorHex) => {
+    console.log(`💄 Lipstick color selected: ${colorHex}`);
     setSelectedLipstickColor(colorHex);
     
     // Reset frame cache ketika warna berubah
     lastProcessedFrameRef.current = null;
     
-    // Force immediate processing untuk warna baru
-    if (isCameraOn) {
-      captureAndProcessFrame();
-    }
-  }, [isCameraOn, captureAndProcessFrame]);
+    // Processing loop akan otomatis melanjutkan karena hasColorEffect berubah
+  }, []);
 
   const handleRetakePhoto = () => {
     setCapturedPhoto(false);
@@ -392,6 +370,7 @@ const CameraLive = () => {
       link.download = `makeover-${new Date().getTime()}.jpg`;
       link.href = canvasRef.current.toDataURL('image/jpeg', 0.95);
       link.click();
+      console.log("💾 Photo saved");
     }
   };
 
@@ -545,15 +524,15 @@ const CameraLive = () => {
 
           <button
             onClick={handleTakePhoto}
-            disabled={!isCameraOn}
+            disabled={!isCameraOn || processingRef.current}
             className={`flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl font-semibold shadow-lg transition-all duration-300 hover:scale-105 text-sm md:text-base min-w-[160px] md:min-w-[200px] justify-center flex-1 ${
-              isCameraOn
+              isCameraOn && !processingRef.current
                 ? "bg-green-600 hover:bg-green-700 text-white" 
                 : "bg-gray-600 text-gray-300 cursor-not-allowed"
             }`}
           >
             <i className="bx bx-camera text-lg md:text-xl"></i>
-            Take Photo
+            {processingRef.current ? "Processing..." : "Take Photo"}
           </button>
         </div>
 
@@ -562,6 +541,7 @@ const CameraLive = () => {
           <div className="bg-white/5 backdrop-blur-md rounded-xl md:rounded-2xl p-2 md:p-3 border border-white/10 w-full max-w-md">
             <div className="text-center text-white/70 text-xs md:text-sm">
               <p>Frames Processed: {frameCounterRef.current}</p>
+              <p>Status: {processingRef.current ? "🔄 Processing" : "🎥 Live"}</p>
               <p>Backend: {backendStatus === "healthy" ? "✅ Connected" : "❌ Offline"}</p>
               <p>Effects: {selectedCheekColor ? "Blush " : ""}{selectedLipstickColor ? "Lipstick" : "None"}</p>
             </div>
