@@ -27,7 +27,6 @@ const CameraLive = () => {
   const lastProcessedFrameRef = useRef(null);
   const animationFrameIdRef = useRef(null);
   const pendingProcessRef = useRef(false);
-  const lastColorChangeRef = useRef(null);
 
   // Sync refs dengan state
   useEffect(() => {
@@ -213,7 +212,6 @@ const CameraLive = () => {
           
           // Reset status ketika camera hidup
           lastProcessedFrameRef.current = null;
-          lastColorChangeRef.current = null;
           
           console.log("✅ Camera started successfully");
         };
@@ -249,7 +247,6 @@ const CameraLive = () => {
     processingRef.current = false;
     pendingProcessRef.current = false;
     lastProcessedFrameRef.current = null;
-    lastColorChangeRef.current = null;
     
     console.log("📷 Camera closed");
   };
@@ -257,7 +254,7 @@ const CameraLive = () => {
   // Processing loop untuk real-time effects - DIPERBAIKI TOTAL
   useEffect(() => {
     let lastProcessTime = 0;
-    const PROCESS_INTERVAL = 200; // Process every 200ms untuk smooth movement
+    const PROCESS_INTERVAL = 300; // Process every 300ms untuk smooth movement
 
     const processLoop = (currentTime) => {
       if (!isCameraOn) {
@@ -269,16 +266,8 @@ const CameraLive = () => {
       }
 
       const hasColorEffect = selectedCheekColorRef.current || selectedLipstickColorRef.current;
-      const currentColors = `${selectedCheekColorRef.current}-${selectedLipstickColorRef.current}`;
       
-      // Check jika ada perubahan warna
-      const colorsChanged = lastColorChangeRef.current !== currentColors;
-      if (colorsChanged) {
-        lastColorChangeRef.current = currentColors;
-        console.log("🎨 Color change detected - continuing processing");
-      }
-      
-      // Always process if we have color effects and enough time has passed
+      // Only process if we have color effects and enough time has passed
       if (hasColorEffect && (currentTime - lastProcessTime > PROCESS_INTERVAL)) {
         captureAndProcessFrame();
         lastProcessTime = currentTime;
@@ -287,30 +276,19 @@ const CameraLive = () => {
         // Log untuk debugging (hanya 5 frame pertama)
         if (frameCounterRef.current <= 5) {
           console.log(`🔄 Processed ${frameCounterRef.current} frames`);
-        } else if (frameCounterRef.current % 10 === 0) {
-          console.log(`📊 Still processing... ${frameCounterRef.current} frames`);
         }
       }
       
-      // Always continue the loop when camera is on and effects are active
-      if (isCameraOn && hasColorEffect) {
-        animationFrameIdRef.current = requestAnimationFrame(processLoop);
-      } else if (isCameraOn && !hasColorEffect) {
-        // Clear canvas jika tidak ada efek
-        if (canvasRef.current) {
-          const ctx = canvasRef.current.getContext('2d');
-          ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-        }
-        // Tetap lanjutkan loop untuk monitoring
+      // Always continue the loop when camera is on
+      if (isCameraOn) {
         animationFrameIdRef.current = requestAnimationFrame(processLoop);
       }
     };
 
     if (isCameraOn) {
-      console.log("🔄 Starting continuous processing loop");
+      console.log("🔄 Starting smart processing loop");
       frameCounterRef.current = 0;
       lastProcessTime = 0;
-      lastColorChangeRef.current = `${selectedCheekColorRef.current}-${selectedLipstickColorRef.current}`;
       
       // Start the loop immediately
       animationFrameIdRef.current = requestAnimationFrame(processLoop);
@@ -378,7 +356,6 @@ const CameraLive = () => {
       
       // Reset status ketika switch camera
       lastProcessedFrameRef.current = null;
-      lastColorChangeRef.current = null;
       
       // Update canvas size
       if (canvasRef.current) {
@@ -398,8 +375,11 @@ const CameraLive = () => {
     // Reset frame cache ketika warna berubah
     lastProcessedFrameRef.current = null;
     
-    // Processing loop akan otomatis melanjutkan karena hasColorEffect berubah
-  }, []);
+    // Force immediate processing untuk warna baru
+    if (isCameraOn) {
+      captureAndProcessFrame();
+    }
+  }, [isCameraOn, captureAndProcessFrame]);
 
   const handleLipstickColorSelect = useCallback((colorHex) => {
     console.log(`💄 Lipstick color selected: ${colorHex}`);
@@ -408,8 +388,11 @@ const CameraLive = () => {
     // Reset frame cache ketika warna berubah
     lastProcessedFrameRef.current = null;
     
-    // Processing loop akan otomatis melanjutkan karena hasColorEffect berubah
-  }, []);
+    // Force immediate processing untuk warna baru
+    if (isCameraOn) {
+      captureAndProcessFrame();
+    }
+  }, [isCameraOn, captureAndProcessFrame]);
 
   const handleRetakePhoto = () => {
     setCapturedPhoto(false);
@@ -603,7 +586,7 @@ const CameraLive = () => {
           <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
             <div className="text-center text-white/70 text-sm">
               <p>Frames Processed: {frameCounterRef.current}</p>
-              <p>Status: {isProcessing ? "🔄 Processing" : "🎥 Live Tracking"}</p>
+              <p>Status: {isProcessing ? "🔄 Processing" : "🎥 Live"}</p>
               <p>Backend: {backendStatus === "healthy" ? "✅ Connected" : "❌ Offline"}</p>
               <p>Effects: {selectedCheekColor ? "Blush " : ""}{selectedLipstickColor ? "Lipstick" : "None"}</p>
             </div>
