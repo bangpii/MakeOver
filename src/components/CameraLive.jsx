@@ -14,7 +14,6 @@ const CameraLive = () => {
   const [facingMode, setFacingMode] = useState("environment");
   const [selectedCheekColor, setSelectedCheekColor] = useState(null);
   const [selectedLipstickColor, setSelectedLipstickColor] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [stream, setStream] = useState(null);
   const [backendStatus, setBackendStatus] = useState("unknown");
   const [useBackend, setUseBackend] = useState(true);
@@ -79,29 +78,21 @@ const CameraLive = () => {
 
     // Prevent multiple simultaneous processing
     if (processingRef.current || pendingProcessRef.current) {
-      console.log("⏳ Skipping frame - already processing");
       return null;
     }
 
     try {
       processingRef.current = true;
       pendingProcessRef.current = true;
-      setIsProcessing(true);
       
       let processedFrame;
       
       if (useBackend && backendStatus !== "offline") {
         // Gunakan backend processing
-        console.log("🚀 Using backend processing");
         const result = await processLiveFrame(frameData, currentCheekColor, currentLipstickColor);
         processedFrame = result.processed_image;
-        
-        if (result.success) {
-          console.log("✅ Effect applied successfully");
-        }
       } else {
         // Gunakan efek lokal
-        console.log("🔄 Using local color overlay");
         processedFrame = await applyLocalColorOverlay(frameData, currentCheekColor, currentLipstickColor);
       }
       
@@ -112,7 +103,6 @@ const CameraLive = () => {
       
       // Fallback ke efek lokal
       try {
-        console.log("🔄 Falling back to local effects");
         const fallbackResult = await applyLocalColorOverlay(frameData, currentCheekColor, currentLipstickColor);
         return fallbackResult;
       } catch (fallbackError) {
@@ -122,7 +112,6 @@ const CameraLive = () => {
     } finally {
       processingRef.current = false;
       pendingProcessRef.current = false;
-      setIsProcessing(false);
     }
   }, [useBackend, backendStatus]);
 
@@ -150,7 +139,6 @@ const CameraLive = () => {
       lastProcessedFrameRef.current = frameData;
       
       // Process the frame dengan efek makeup
-      console.log("🎨 Processing frame with effects...");
       const processedFrame = await processFrame(frameData);
       
       // Display processed frame di canvas - HANYA jika ada efek
@@ -159,16 +147,11 @@ const CameraLive = () => {
         const img = new Image();
         
         img.onload = () => {
-          console.log("🖼️ Displaying processed image on canvas");
           // Clear canvas terlebih dahulu
           displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
           
           // Draw processed image dengan ukuran yang tepat
           displayCtx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
-        };
-        
-        img.onerror = (error) => {
-          console.error("❌ Error loading processed image:", error);
         };
         
         img.src = processedFrame;
@@ -207,13 +190,10 @@ const CameraLive = () => {
           if (canvasRef.current) {
             canvasRef.current.width = videoRef.current.videoWidth;
             canvasRef.current.height = videoRef.current.videoHeight;
-            console.log(`🎯 Canvas size set to: ${canvasRef.current.width}x${canvasRef.current.height}`);
           }
           
           // Reset status ketika camera hidup
           lastProcessedFrameRef.current = null;
-          
-          console.log("✅ Camera started successfully");
         };
 
       } catch (err) {
@@ -247,11 +227,9 @@ const CameraLive = () => {
     processingRef.current = false;
     pendingProcessRef.current = false;
     lastProcessedFrameRef.current = null;
-    
-    console.log("📷 Camera closed");
   };
 
-  // Processing loop untuk real-time effects - DIPERBAIKI TOTAL
+  // Processing loop untuk real-time effects
   useEffect(() => {
     let lastProcessTime = 0;
     const PROCESS_INTERVAL = 300; // Process every 300ms untuk smooth movement
@@ -272,11 +250,6 @@ const CameraLive = () => {
         captureAndProcessFrame();
         lastProcessTime = currentTime;
         frameCounterRef.current++;
-        
-        // Log untuk debugging (hanya 5 frame pertama)
-        if (frameCounterRef.current <= 5) {
-          console.log(`🔄 Processed ${frameCounterRef.current} frames`);
-        }
       }
       
       // Always continue the loop when camera is on
@@ -286,7 +259,6 @@ const CameraLive = () => {
     };
 
     if (isCameraOn) {
-      console.log("🔄 Starting smart processing loop");
       frameCounterRef.current = 0;
       lastProcessTime = 0;
       
@@ -298,7 +270,6 @@ const CameraLive = () => {
       if (animationFrameIdRef.current) {
         cancelAnimationFrame(animationFrameIdRef.current);
         animationFrameIdRef.current = null;
-        console.log("🔄 Processing loop stopped");
       }
     };
   }, [isCameraOn, captureAndProcessFrame]);
@@ -311,7 +282,6 @@ const CameraLive = () => {
       
       // Tunggu proses terakhir selesai sebelum ambil foto
       if (processingRef.current) {
-        console.log("⏳ Waiting for current processing to finish...");
         let waitCount = 0;
         while (processingRef.current && waitCount < 20) {
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -322,8 +292,6 @@ const CameraLive = () => {
       // Capture final processed frame
       await captureAndProcessFrame();
       setCapturedPhoto(true);
-      
-      console.log("✅ Photo captured successfully");
       
     } catch (error) {
       console.error('❌ Error taking photo:', error);
@@ -341,7 +309,6 @@ const CameraLive = () => {
     }
 
     try {
-      console.log(`🔄 Switching camera to: ${newFacingMode}`);
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: newFacingMode,
@@ -367,9 +334,8 @@ const CameraLive = () => {
     }
   };
 
-  // Handler untuk pilihan warna - DIPERBAIKI
+  // Handler untuk pilihan warna
   const handleCheekColorSelect = useCallback((colorHex) => {
-    console.log(`🎨 Cheek color selected: ${colorHex}`);
     setSelectedCheekColor(colorHex);
     
     // Reset frame cache ketika warna berubah
@@ -382,7 +348,6 @@ const CameraLive = () => {
   }, [isCameraOn, captureAndProcessFrame]);
 
   const handleLipstickColorSelect = useCallback((colorHex) => {
-    console.log(`💄 Lipstick color selected: ${colorHex}`);
     setSelectedLipstickColor(colorHex);
     
     // Reset frame cache ketika warna berubah
@@ -405,7 +370,6 @@ const CameraLive = () => {
       link.download = `makeover-${new Date().getTime()}.jpg`;
       link.href = canvasRef.current.toDataURL('image/jpeg', 0.95);
       link.click();
-      console.log("💾 Photo saved");
     }
   };
 
@@ -535,16 +499,6 @@ const CameraLive = () => {
             </div>
           )}
 
-          {/* Loading Indicator */}
-          {isProcessing && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-20">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-white text-lg font-semibold">Applying Makeup...</span>
-              </div>
-            </div>
-          )}
-
           {/* Camera Off Placeholder */}
           {!isCameraOn && !capturedPhoto && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
@@ -569,15 +523,15 @@ const CameraLive = () => {
 
           <button
             onClick={handleTakePhoto}
-            disabled={!isCameraOn || isProcessing}
+            disabled={!isCameraOn || processingRef.current}
             className={`flex items-center gap-2 px-8 py-4 rounded-2xl font-semibold shadow-lg transition-all duration-300 hover:scale-105 text-base md:text-lg min-w-[200px] justify-center ${
-              isCameraOn && !isProcessing
+              isCameraOn && !processingRef.current
                 ? "bg-green-600 hover:bg-green-700 text-white" 
                 : "bg-gray-600 text-gray-300 cursor-not-allowed"
             }`}
           >
             <i className="bx bx-camera text-xl"></i>
-            {isProcessing ? "Processing..." : "Take Photo"}
+            Take Photo
           </button>
         </div>
 
@@ -586,7 +540,6 @@ const CameraLive = () => {
           <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
             <div className="text-center text-white/70 text-sm">
               <p>Frames Processed: {frameCounterRef.current}</p>
-              <p>Status: {isProcessing ? "🔄 Processing" : "🎥 Live"}</p>
               <p>Backend: {backendStatus === "healthy" ? "✅ Connected" : "❌ Offline"}</p>
               <p>Effects: {selectedCheekColor ? "Blush " : ""}{selectedLipstickColor ? "Lipstick" : "None"}</p>
             </div>
