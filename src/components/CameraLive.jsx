@@ -4,6 +4,7 @@ import "boxicons/css/boxicons.min.css";
 import WarnaKulitPipi from "./WarnaKulitPipi";
 import WarnaLipstik from "./WarnaLipstik";
 import { processLiveFrame, checkBackendHealth, applyLocalColorOverlay } from "../Api_Camera";
+import Animasi_Background from "./Animasi_Background";
 
 const CameraLive = () => {
   const navigate = useNavigate(); 
@@ -397,6 +398,9 @@ const CameraLive = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white overflow-hidden">
+
+      <Animasi_Background/>
+
       {/* NAVBAR */}
       <nav className="bg-white backdrop-blur-md border-b border-white flex items-center justify-between px-4 md:px-8 py-4 shadow-lg">
         <h1 className="text-xl text-black md:text-3xl font-black tracking-widest">
