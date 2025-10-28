@@ -66,7 +66,7 @@ const CameraLive = () => {
     }
   };
 
-  // Fungsi utama untuk memproses frame - DIPERBAIKI
+  // Fungsi utama untuk memproses frame
   const processFrame = useCallback(async (frameData) => {
     const currentCheekColor = selectedCheekColorRef.current;
     const currentLipstickColor = selectedLipstickColorRef.current;
@@ -115,7 +115,7 @@ const CameraLive = () => {
     }
   }, [useBackend, backendStatus]);
 
-  // Fungsi untuk capture frame dan proses - DIPERBAIKI
+  // Fungsi untuk capture frame dan proses
   const captureAndProcessFrame = useCallback(async () => {
     if (!videoRef.current || !isCameraOn || processingRef.current || pendingProcessRef.current) {
       return;
@@ -232,7 +232,7 @@ const CameraLive = () => {
   // Processing loop untuk real-time effects
   useEffect(() => {
     let lastProcessTime = 0;
-    const PROCESS_INTERVAL = 300; // Process every 300ms untuk smooth movement
+    const PROCESS_INTERVAL = 300;
 
     const processLoop = (currentTime) => {
       if (!isCameraOn) {
@@ -275,22 +275,30 @@ const CameraLive = () => {
   }, [isCameraOn, captureAndProcessFrame]);
 
   const handleTakePhoto = async () => {
-    if (!isCameraOn) return;
+    if (!isCameraOn || processingRef.current) return;
 
     try {
       console.log("📸 Taking photo...");
       
-      // Tunggu proses terakhir selesai sebelum ambil foto
-      if (processingRef.current) {
-        let waitCount = 0;
-        while (processingRef.current && waitCount < 20) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          waitCount++;
-        }
+      // Capture current frame langsung tanpa menunggu
+      const canvas = document.createElement('canvas');
+      const video = videoRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Jika ada efek, gunakan frame yang sudah diproses
+      if (canvasRef.current && (selectedCheekColor || selectedLipstickColor)) {
+        // const processedCtx = canvasRef.current.getContext('2d');
+        ctx.drawImage(canvasRef.current, 0, 0, canvas.width, canvas.height);
       }
       
-      // Capture final processed frame
-      await captureAndProcessFrame();
+      // Simpan ke canvas utama untuk preview
+      const displayCtx = canvasRef.current.getContext('2d');
+      displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      displayCtx.drawImage(canvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
+      
       setCapturedPhoto(true);
       
     } catch (error) {
@@ -398,26 +406,26 @@ const CameraLive = () => {
       </nav>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-6">
+      <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4 space-y-4 md:space-y-6">
         {/* BACKEND STATUS */}
         <div className="w-full max-w-4xl">
           {backendStatus === "healthy" && (
-            <div className="bg-green-500/20 border border-green-500 rounded-lg p-3 text-center mb-4">
-              <p className="text-green-300 text-sm">
+            <div className="bg-green-500/20 border border-green-500 rounded-lg p-2 md:p-3 text-center mb-3 md:mb-4">
+              <p className="text-green-300 text-xs md:text-sm">
                 ✅ Backend connected - Advanced face detection active
               </p>
             </div>
           )}
           {backendStatus === "limited" && (
-            <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-3 text-center mb-4">
-              <p className="text-yellow-300 text-sm">
+            <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-2 md:p-3 text-center mb-3 md:mb-4">
+              <p className="text-yellow-300 text-xs md:text-sm">
                 ⚠️ Backend limited - Using basic effects
               </p>
             </div>
           )}
           {backendStatus === "offline" && (
-            <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-center mb-4">
-              <p className="text-red-300 text-sm">
+            <div className="bg-red-500/20 border border-red-500 rounded-lg p-2 md:p-3 text-center mb-3 md:mb-4">
+              <p className="text-red-300 text-xs md:text-sm">
                 ❌ Backend offline - Using local effects
               </p>
             </div>
@@ -425,7 +433,7 @@ const CameraLive = () => {
         </div>
 
         {/* CAMERA CONTAINER */}
-        <div className="relative w-full max-w-4xl aspect-[4/3] bg-black rounded-3xl border-4 border-white/30 shadow-2xl overflow-hidden">
+        <div className="relative w-full max-w-4xl aspect-[3/4] md:aspect-[4/3] bg-black rounded-xl md:rounded-3xl border-2 md:border-4 border-white/30 shadow-xl md:shadow-2xl overflow-hidden">
           {/* Video Element - SELALU TERLIHAT */}
           <video 
             ref={videoRef} 
@@ -448,10 +456,10 @@ const CameraLive = () => {
           />
 
           {/* ICONS TOP RIGHT */}
-          <div className="absolute top-4 right-4 flex items-center gap-3 z-10">
+          <div className="absolute top-2 md:top-4 right-2 md:right-4 flex items-center gap-2 md:gap-3 z-10">
             {!capturedPhoto && isCameraOn && (
               <button
-                className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-xl hover:bg-white hover:text-black transition-all duration-300 shadow-lg backdrop-blur-sm"
+                className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-lg md:text-xl hover:bg-white hover:text-black transition-all duration-300 shadow-lg backdrop-blur-sm"
                 title="Switch Camera"
                 onClick={handleSwitchCamera}
               >
@@ -462,7 +470,7 @@ const CameraLive = () => {
             {capturedPhoto && (
               <>
                 <button
-                  className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-xl hover:bg-green-500 hover:border-green-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
+                  className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-lg md:text-xl hover:bg-green-500 hover:border-green-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
                   title="Save Photo"
                   onClick={handleSavePhoto}
                 >
@@ -470,7 +478,7 @@ const CameraLive = () => {
                 </button>
 
                 <button
-                  className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-xl hover:bg-blue-500 hover:border-blue-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
+                  className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-lg md:text-xl hover:bg-blue-500 hover:border-blue-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
                   title="Retake Photo"
                   onClick={handleRetakePhoto}
                 >
@@ -482,7 +490,7 @@ const CameraLive = () => {
 
           {/* COLOR SELECTORS - BOTTOM */}
           {isCameraOn && !capturedPhoto && (
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-[95%] max-w-3xl flex flex-col md:flex-row gap-3 md:gap-4 z-10">
+            <div className="absolute bottom-2 md:bottom-4 left-1/2 transform -translate-x-1/2 w-[98%] max-w-3xl flex flex-col md:flex-row gap-2 md:gap-4 z-10">
               <div className="flex-1 min-w-0">
                 <WarnaKulitPipi 
                   onColorSelect={handleCheekColorSelect}
@@ -503,42 +511,42 @@ const CameraLive = () => {
           {!isCameraOn && !capturedPhoto && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
               <div className="text-center text-white/70">
-                <i className="bx bx-camera-off text-6xl md:text-8xl mb-4"></i>
-                <p className="text-lg md:text-xl">Kamera belum aktif</p>
-                <p className="text-sm md:text-base mt-2">Klik "Open Camera" untuk memulai</p>
+                <i className="bx bx-camera-off text-4xl md:text-6xl lg:text-8xl mb-3 md:mb-4"></i>
+                <p className="text-base md:text-lg lg:text-xl">Kamera belum aktif</p>
+                <p className="text-xs md:text-sm lg:text-base mt-1 md:mt-2">Klik "Open Camera" untuk memulai</p>
               </div>
             </div>
           )}
         </div>
 
         {/* CONTROL BUTTONS */}
-        <div className="flex flex-col sm:flex-row gap-4 items-center">
+        <div className="flex flex-col sm:flex-row gap-3 md:gap-4 items-center w-full max-w-md">
           <button
             onClick={handleToggleCamera}
-            className="flex items-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-8 py-4 rounded-2xl font-semibold shadow-lg transition-all duration-300 hover:scale-105 text-base md:text-lg min-w-[200px] justify-center"
+            className="flex items-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-6 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl font-semibold shadow-lg transition-all duration-300 hover:scale-105 text-sm md:text-base min-w-[160px] md:min-w-[200px] justify-center flex-1"
           >
-            <i className="bx bx-camera text-xl"></i>
+            <i className="bx bx-camera text-lg md:text-xl"></i>
             {isCameraOn ? "Close Camera" : "Open Camera"}
           </button>
 
           <button
             onClick={handleTakePhoto}
             disabled={!isCameraOn || processingRef.current}
-            className={`flex items-center gap-2 px-8 py-4 rounded-2xl font-semibold shadow-lg transition-all duration-300 hover:scale-105 text-base md:text-lg min-w-[200px] justify-center ${
+            className={`flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl font-semibold shadow-lg transition-all duration-300 hover:scale-105 text-sm md:text-base min-w-[160px] md:min-w-[200px] justify-center flex-1 ${
               isCameraOn && !processingRef.current
                 ? "bg-green-600 hover:bg-green-700 text-white" 
                 : "bg-gray-600 text-gray-300 cursor-not-allowed"
             }`}
           >
-            <i className="bx bx-camera text-xl"></i>
+            <i className="bx bx-camera text-lg md:text-xl"></i>
             Take Photo
           </button>
         </div>
 
         {/* PERFORMANCE INFO */}
         {isCameraOn && (
-          <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
-            <div className="text-center text-white/70 text-sm">
+          <div className="bg-white/5 backdrop-blur-md rounded-xl md:rounded-2xl p-2 md:p-3 border border-white/10 w-full max-w-md">
+            <div className="text-center text-white/70 text-xs md:text-sm">
               <p>Frames Processed: {frameCounterRef.current}</p>
               <p>Backend: {backendStatus === "healthy" ? "✅ Connected" : "❌ Offline"}</p>
               <p>Effects: {selectedCheekColor ? "Blush " : ""}{selectedLipstickColor ? "Lipstick" : "None"}</p>
@@ -548,15 +556,15 @@ const CameraLive = () => {
 
         {/* SELECTED COLORS DISPLAY */}
         {(selectedCheekColor || selectedLipstickColor) && isCameraOn && (
-          <div className="flex flex-wrap gap-4 items-center justify-center bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20">
-            <span className="text-white font-semibold">Active Effects:</span>
+          <div className="flex flex-wrap gap-2 md:gap-4 items-center justify-center bg-white/10 backdrop-blur-md rounded-xl md:rounded-2xl p-3 md:p-4 border border-white/20 w-full max-w-md">
+            <span className="text-white font-semibold text-sm md:text-base">Active Effects:</span>
             {selectedCheekColor && (
-              <div className="flex items-center gap-2 bg-pink-500/20 px-3 py-2 rounded-lg">
+              <div className="flex items-center gap-1 md:gap-2 bg-pink-500/20 px-2 md:px-3 py-1 md:py-2 rounded-lg">
                 <div 
-                  className="w-6 h-6 rounded-full border-2 border-white shadow-md"
+                  className="w-4 h-4 md:w-6 md:h-6 rounded-full border-2 border-white shadow-md"
                   style={{ backgroundColor: selectedCheekColor }}
                 ></div>
-                <span className="text-white text-sm">Blush</span>
+                <span className="text-white text-xs md:text-sm">Blush</span>
                 <button 
                   onClick={() => {
                     setSelectedCheekColor(null);
@@ -566,19 +574,19 @@ const CameraLive = () => {
                       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
                     }
                   }}
-                  className="text-xs bg-red-500 hover:bg-red-600 w-5 h-5 rounded-full flex items-center justify-center"
+                  className="text-xs bg-red-500 hover:bg-red-600 w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center"
                 >
                   ×
                 </button>
               </div>
             )}
             {selectedLipstickColor && (
-              <div className="flex items-center gap-2 bg-red-500/20 px-3 py-2 rounded-lg">
+              <div className="flex items-center gap-1 md:gap-2 bg-red-500/20 px-2 md:px-3 py-1 md:py-2 rounded-lg">
                 <div 
-                  className="w-6 h-6 rounded-full border-2 border-white shadow-md"
+                  className="w-4 h-4 md:w-6 md:h-6 rounded-full border-2 border-white shadow-md"
                   style={{ backgroundColor: selectedLipstickColor }}
                 ></div>
-                <span className="text-white text-sm">Lipstick</span>
+                <span className="text-white text-xs md:text-sm">Lipstick</span>
                 <button 
                   onClick={() => {
                     setSelectedLipstickColor(null);
@@ -588,7 +596,7 @@ const CameraLive = () => {
                       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
                     }
                   }}
-                  className="text-xs bg-red-500 hover:bg-red-600 w-5 h-5 rounded-full flex items-center justify-center"
+                  className="text-xs bg-red-500 hover:bg-red-600 w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center"
                 >
                   ×
                 </button>
