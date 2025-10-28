@@ -2,19 +2,19 @@ import React from 'react'
 
 export default function Animasi_Background({ children }) {
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-[#0b0210]">
-      {/* Floating pink hearts animation */}
+    <div className="relative w-full h-screen overflow-hidden bg-black">
+      {/* Floating big pink hearts with white border */}
       <div className="absolute inset-0 pointer-events-none">
-        {[...Array(25)].map((_, i) => (
+        {[...Array(20)].map((_, i) => (
           <div
             key={i}
-            className="absolute text-pink-400 opacity-70 animate-float-heart"
+            className="absolute text-pink-500 animate-float-heart drop-shadow-[0_0_6px_rgba(255,255,255,0.8)]"
             style={{
               left: `${Math.random() * 100}%`,
-              bottom: `${Math.random() * 20}%`,
-              fontSize: `${Math.random() * 1.5 + 1}rem`,
+              bottom: `-${Math.random() * 30 + 10}%`, // start from below the screen
+              fontSize: `${Math.random() * 2 + 2}rem`, // bigger hearts
               animationDelay: `${Math.random() * 10}s`,
-              animationDuration: `${10 + Math.random() * 10}s`
+              animationDuration: `${20 + Math.random() * 15}s` // slower movement
             }}
           >
             ❤
@@ -23,11 +23,11 @@ export default function Animasi_Background({ children }) {
       </div>
 
       {/* Content on top */}
-      <div className="relative z-10 flex items-center justify-center h-full">
+      <div className="relative z-10 flex items-center justify-center h-full text-white">
         {children}
       </div>
 
-      {/* Custom CSS animation for floating hearts */}
+      {/* Custom CSS animation for slow floating hearts */}
       <style>{`
         @keyframes floatHeart {
           0% {
@@ -38,17 +38,17 @@ export default function Animasi_Background({ children }) {
             opacity: 1;
           }
           50% {
-            transform: translateY(-50vh) scale(1.2) rotate(15deg);
-            opacity: 0.8;
+            transform: translateY(-50vh) scale(1.1) rotate(10deg);
+            opacity: 0.9;
           }
           100% {
-            transform: translateY(-100vh) scale(1.4) rotate(-15deg);
+            transform: translateY(-120vh) scale(1.3) rotate(-10deg);
             opacity: 0;
           }
         }
         .animate-float-heart {
           position: absolute;
-          animation: floatHeart linear infinite;
+          animation: floatHeart ease-in-out infinite;
         }
       `}</style>
     </div>

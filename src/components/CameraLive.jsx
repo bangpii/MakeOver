@@ -465,7 +465,7 @@ const CameraLive = () => {
           <div className="absolute top-2 md:top-4 right-2 md:right-4 flex items-center gap-2 md:gap-3 z-10">
             {!capturedPhoto && isCameraOn && (
               <button
-                className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-lg md:text-xl hover:bg-white hover:text-black transition-all duration-300 shadow-lg backdrop-blur-sm"
+                className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2 border-white/80 bg-black text-white text-lg md:text-xl hover:bg-white hover:text-black transition-all duration-300 shadow-lg backdrop-blur-sm"
                 title="Switch Camera"
                 onClick={handleSwitchCamera}
               >
@@ -476,7 +476,7 @@ const CameraLive = () => {
             {capturedPhoto && (
               <>
                 <button
-                  className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-lg md:text-xl hover:bg-green-500 hover:border-green-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
+                  className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2 border-white/80 bg-black text-white text-lg md:text-xl hover:bg-green-500 hover:border-green-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
                   title="Save Photo"
                   onClick={handleSavePhoto}
                 >
@@ -484,7 +484,7 @@ const CameraLive = () => {
                 </button>
 
                 <button
-                  className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2 border-white/80 bg-black/50 text-white text-lg md:text-xl hover:bg-blue-500 hover:border-blue-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
+                  className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2 border-white/80 bg-black text-white text-lg md:text-xl hover:bg-blue-500 hover:border-blue-500 transition-all duration-300 shadow-lg backdrop-blur-sm"
                   title="Retake Photo"
                   onClick={handleRetakePhoto}
                 >
@@ -519,7 +519,7 @@ const CameraLive = () => {
 
           {/* Camera Off Placeholder */}
           {!isCameraOn && !capturedPhoto && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+            <div className="absolute inset-0 flex items-center justify-center bg-black">
               <div className="text-center text-white/70">
                 <i className="bx bx-camera-off text-4xl md:text-6xl lg:text-8xl mb-3 md:mb-4"></i>
                 <p className="text-base md:text-lg lg:text-xl">Kamera belum aktif</p>
