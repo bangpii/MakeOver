@@ -27,7 +27,7 @@ const CameraLive = () => {
   const lastProcessedFrameRef = useRef(null);
   const animationFrameIdRef = useRef(null);
   const pendingProcessRef = useRef(false);
-  const effectAppliedRef = useRef(false);
+  const lastColorChangeRef = useRef(null);
 
   // Sync refs dengan state
   useEffect(() => {
@@ -73,16 +73,15 @@ const CameraLive = () => {
     const currentCheekColor = selectedCheekColorRef.current;
     const currentLipstickColor = selectedLipstickColorRef.current;
 
-    // Jika tidak ada warna yang dipilih, return frame asli
+    // Jika tidak ada warna yang dipilih, return null (tidak ada efek)
     if (!currentCheekColor && !currentLipstickColor) {
-      effectAppliedRef.current = false;
-      return frameData;
+      return null;
     }
 
     // Prevent multiple simultaneous processing
     if (processingRef.current || pendingProcessRef.current) {
       console.log("⏳ Skipping frame - already processing");
-      return frameData;
+      return null;
     }
 
     try {
@@ -98,17 +97,13 @@ const CameraLive = () => {
         const result = await processLiveFrame(frameData, currentCheekColor, currentLipstickColor);
         processedFrame = result.processed_image;
         
-        // Mark effect as applied successfully
         if (result.success) {
-          effectAppliedRef.current = true;
-          console.log("✅ Effect applied successfully, stopping processing loop");
+          console.log("✅ Effect applied successfully");
         }
       } else {
         // Gunakan efek lokal
         console.log("🔄 Using local color overlay");
         processedFrame = await applyLocalColorOverlay(frameData, currentCheekColor, currentLipstickColor);
-        effectAppliedRef.current = true;
-        console.log("✅ Local effect applied, stopping processing loop");
       }
       
       return processedFrame;
@@ -120,11 +115,10 @@ const CameraLive = () => {
       try {
         console.log("🔄 Falling back to local effects");
         const fallbackResult = await applyLocalColorOverlay(frameData, currentCheekColor, currentLipstickColor);
-        effectAppliedRef.current = true;
         return fallbackResult;
       } catch (fallbackError) {
         console.error('💥 Even fallback failed:', fallbackError);
-        return frameData;
+        return null;
       }
     } finally {
       processingRef.current = false;
@@ -133,15 +127,9 @@ const CameraLive = () => {
     }
   }, [useBackend, backendStatus]);
 
-  // Fungsi untuk capture frame dan proses - DIPERBAIKI SECARA SIGNIFIKAN
+  // Fungsi untuk capture frame dan proses - DIPERBAIKI
   const captureAndProcessFrame = useCallback(async () => {
     if (!videoRef.current || !isCameraOn || processingRef.current || pendingProcessRef.current) {
-      return;
-    }
-
-    // Stop processing if effect has been applied and no color change
-    if (effectAppliedRef.current && lastProcessedFrameRef.current) {
-      console.log("🛑 Effect already applied, skipping processing");
       return;
     }
 
@@ -157,7 +145,7 @@ const CameraLive = () => {
       const frameData = canvas.toDataURL('image/jpeg', 0.8);
       
       // Skip jika frame sama dengan sebelumnya (optimization)
-      if (lastProcessedFrameRef.current === frameData && effectAppliedRef.current) {
+      if (lastProcessedFrameRef.current === frameData) {
         return;
       }
       lastProcessedFrameRef.current = frameData;
@@ -166,7 +154,7 @@ const CameraLive = () => {
       console.log("🎨 Processing frame with effects...");
       const processedFrame = await processFrame(frameData);
       
-      // Display processed frame di canvas - FIXED DISPLAY ISSUE
+      // Display processed frame di canvas - HANYA jika ada efek
       if (canvasRef.current && processedFrame) {
         const displayCtx = canvasRef.current.getContext('2d');
         const img = new Image();
@@ -178,10 +166,6 @@ const CameraLive = () => {
           
           // Draw processed image dengan ukuran yang tepat
           displayCtx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
-          
-          // Force re-render dengan mengubah state
-          setCapturedPhoto(prev => !prev); // Temporary toggle untuk force update
-          setTimeout(() => setCapturedPhoto(prev => !prev), 50);
         };
         
         img.onerror = (error) => {
@@ -189,8 +173,10 @@ const CameraLive = () => {
         };
         
         img.src = processedFrame;
-      } else {
-        console.error("❌ Canvas ref or processed frame is null");
+      } else if (canvasRef.current && !processedFrame) {
+        // Jika tidak ada efek, clear canvas untuk menunjukkan video asli
+        const displayCtx = canvasRef.current.getContext('2d');
+        displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       }
     } catch (error) {
       console.error('❌ Error in captureAndProcessFrame:', error);
@@ -218,16 +204,16 @@ const CameraLive = () => {
           setIsCameraOn(true);
           setCapturedPhoto(false);
           
-          // Setup canvas size - FIXED: Match video dimensions
+          // Setup canvas size - Match video dimensions
           if (canvasRef.current) {
             canvasRef.current.width = videoRef.current.videoWidth;
             canvasRef.current.height = videoRef.current.videoHeight;
             console.log(`🎯 Canvas size set to: ${canvasRef.current.width}x${canvasRef.current.height}`);
           }
           
-          // Reset effect status ketika camera hidup
-          effectAppliedRef.current = false;
+          // Reset status ketika camera hidup
           lastProcessedFrameRef.current = null;
+          lastColorChangeRef.current = null;
           
           console.log("✅ Camera started successfully");
         };
@@ -262,16 +248,16 @@ const CameraLive = () => {
     setSelectedLipstickColor(null);
     processingRef.current = false;
     pendingProcessRef.current = false;
-    effectAppliedRef.current = false;
     lastProcessedFrameRef.current = null;
+    lastColorChangeRef.current = null;
     
     console.log("📷 Camera closed");
   };
 
-  // Processing loop untuk real-time effects
+  // Processing loop untuk real-time effects - DIPERBAIKI TOTAL
   useEffect(() => {
     let lastProcessTime = 0;
-    const PROCESS_INTERVAL = 800; // Process every 800ms
+    const PROCESS_INTERVAL = 200; // Process every 200ms untuk smooth movement
 
     const processLoop = (currentTime) => {
       if (!isCameraOn) {
@@ -283,44 +269,50 @@ const CameraLive = () => {
       }
 
       const hasColorEffect = selectedCheekColorRef.current || selectedLipstickColorRef.current;
+      const currentColors = `${selectedCheekColorRef.current}-${selectedLipstickColorRef.current}`;
       
-      // Stop processing loop jika effect sudah diaplikasikan
-      if (effectAppliedRef.current && hasColorEffect) {
-        if (!selectedCheekColorRef.current && !selectedLipstickColorRef.current) {
-          console.log("🛑 No color effects, stopping processing loop");
-          if (animationFrameIdRef.current) {
-            cancelAnimationFrame(animationFrameIdRef.current);
-            animationFrameIdRef.current = null;
-          }
-          return;
-        }
+      // Check jika ada perubahan warna
+      const colorsChanged = lastColorChangeRef.current !== currentColors;
+      if (colorsChanged) {
+        lastColorChangeRef.current = currentColors;
+        console.log("🎨 Color change detected - continuing processing");
       }
       
-      // Only process if we have color effects, enough time has passed, and no pending process
-      if (hasColorEffect && 
-          (currentTime - lastProcessTime > PROCESS_INTERVAL) && 
-          !processingRef.current && 
-          !pendingProcessRef.current &&
-          !effectAppliedRef.current) {
-        
+      // Always process if we have color effects and enough time has passed
+      if (hasColorEffect && (currentTime - lastProcessTime > PROCESS_INTERVAL)) {
         captureAndProcessFrame();
         lastProcessTime = currentTime;
         frameCounterRef.current++;
         
-        // Log untuk debugging
-        if (frameCounterRef.current % 3 === 0) {
+        // Log untuk debugging (hanya 5 frame pertama)
+        if (frameCounterRef.current <= 5) {
           console.log(`🔄 Processed ${frameCounterRef.current} frames`);
+        } else if (frameCounterRef.current % 10 === 0) {
+          console.log(`📊 Still processing... ${frameCounterRef.current} frames`);
         }
       }
       
-      animationFrameIdRef.current = requestAnimationFrame(processLoop);
+      // Always continue the loop when camera is on and effects are active
+      if (isCameraOn && hasColorEffect) {
+        animationFrameIdRef.current = requestAnimationFrame(processLoop);
+      } else if (isCameraOn && !hasColorEffect) {
+        // Clear canvas jika tidak ada efek
+        if (canvasRef.current) {
+          const ctx = canvasRef.current.getContext('2d');
+          ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        }
+        // Tetap lanjutkan loop untuk monitoring
+        animationFrameIdRef.current = requestAnimationFrame(processLoop);
+      }
     };
 
     if (isCameraOn) {
-      console.log("🔄 Starting processing loop");
+      console.log("🔄 Starting continuous processing loop");
       frameCounterRef.current = 0;
       lastProcessTime = 0;
-      effectAppliedRef.current = false;
+      lastColorChangeRef.current = `${selectedCheekColorRef.current}-${selectedLipstickColorRef.current}`;
+      
+      // Start the loop immediately
       animationFrameIdRef.current = requestAnimationFrame(processLoop);
     }
 
@@ -384,9 +376,9 @@ const CameraLive = () => {
       setStream(newStream);
       videoRef.current.play();
       
-      // Reset effect status ketika switch camera
-      effectAppliedRef.current = false;
+      // Reset status ketika switch camera
       lastProcessedFrameRef.current = null;
+      lastColorChangeRef.current = null;
       
       // Update canvas size
       if (canvasRef.current) {
@@ -398,45 +390,29 @@ const CameraLive = () => {
     }
   };
 
-  // Handler untuk pilihan warna
+  // Handler untuk pilihan warna - DIPERBAIKI
   const handleCheekColorSelect = useCallback((colorHex) => {
     console.log(`🎨 Cheek color selected: ${colorHex}`);
     setSelectedCheekColor(colorHex);
     
-    // Reset frame cache dan effect status ketika warna berubah
+    // Reset frame cache ketika warna berubah
     lastProcessedFrameRef.current = null;
-    effectAppliedRef.current = false;
     
-    // Force immediate processing untuk warna baru
-    if (isCameraOn) {
-      console.log("🎯 Immediate processing for new cheek color");
-      setTimeout(() => {
-        captureAndProcessFrame();
-      }, 100);
-    }
-  }, [isCameraOn, captureAndProcessFrame]);
+    // Processing loop akan otomatis melanjutkan karena hasColorEffect berubah
+  }, []);
 
   const handleLipstickColorSelect = useCallback((colorHex) => {
     console.log(`💄 Lipstick color selected: ${colorHex}`);
     setSelectedLipstickColor(colorHex);
     
-    // Reset frame cache dan effect status ketika warna berubah
+    // Reset frame cache ketika warna berubah
     lastProcessedFrameRef.current = null;
-    effectAppliedRef.current = false;
     
-    // Force immediate processing untuk warna baru
-    if (isCameraOn) {
-      console.log("🎯 Immediate processing for new lipstick color");
-      setTimeout(() => {
-        captureAndProcessFrame();
-      }, 100);
-    }
-  }, [isCameraOn, captureAndProcessFrame]);
+    // Processing loop akan otomatis melanjutkan karena hasColorEffect berubah
+  }, []);
 
   const handleRetakePhoto = () => {
     setCapturedPhoto(false);
-    // Reset effect status untuk live camera mode
-    effectAppliedRef.current = false;
     lastProcessedFrameRef.current = null;
   };
 
@@ -449,13 +425,6 @@ const CameraLive = () => {
       console.log("💾 Photo saved");
     }
   };
-
-  // Debug: Log ketika canvas update
-  useEffect(() => {
-    if (canvasRef.current && capturedPhoto) {
-      console.log("🖼️ Canvas updated with captured photo");
-    }
-  }, [capturedPhoto]);
 
   // Clear semua efek ketika component unmount
   useEffect(() => {
@@ -510,23 +479,25 @@ const CameraLive = () => {
 
         {/* CAMERA CONTAINER */}
         <div className="relative w-full max-w-4xl aspect-[4/3] bg-black rounded-3xl border-4 border-white/30 shadow-2xl overflow-hidden">
-          {/* Video Element - Hidden when photo is captured */}
+          {/* Video Element - SELALU TERLIHAT */}
           <video 
             ref={videoRef} 
-            className={`w-full h-full object-cover transition-opacity duration-300 ${
-              capturedPhoto ? 'opacity-0' : 'opacity-100'
-            }`}
+            className="w-full h-full object-cover"
             autoPlay 
             muted
             playsInline
           />
           
-          {/* Canvas Element - Show when processed or captured */}
+          {/* Canvas Element - Overlay transparan di atas video */}
           <canvas
             ref={canvasRef}
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
               capturedPhoto ? 'opacity-100' : (selectedCheekColor || selectedLipstickColor) ? 'opacity-100' : 'opacity-0'
             }`}
+            style={{
+              mixBlendMode: 'normal',
+              pointerEvents: 'none'
+            }}
           />
 
           {/* ICONS TOP RIGHT */}
@@ -583,7 +554,7 @@ const CameraLive = () => {
 
           {/* Loading Indicator */}
           {isProcessing && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-20">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
                 <span className="text-white text-lg font-semibold">Applying Makeup...</span>
@@ -632,9 +603,9 @@ const CameraLive = () => {
           <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
             <div className="text-center text-white/70 text-sm">
               <p>Frames Processed: {frameCounterRef.current}</p>
-              <p>Status: {isProcessing ? "🔄 Processing" : effectAppliedRef.current ? "✅ Effect Applied" : "⏳ Ready"}</p>
+              <p>Status: {isProcessing ? "🔄 Processing" : "🎥 Live Tracking"}</p>
               <p>Backend: {backendStatus === "healthy" ? "✅ Connected" : "❌ Offline"}</p>
-              <p>Effects: {selectedCheekColor ? "Blush " : ""}{selectedLipstickColor ? "Lipstick" : ""}</p>
+              <p>Effects: {selectedCheekColor ? "Blush " : ""}{selectedLipstickColor ? "Lipstick" : "None"}</p>
             </div>
           </div>
         )}
@@ -653,7 +624,11 @@ const CameraLive = () => {
                 <button 
                   onClick={() => {
                     setSelectedCheekColor(null);
-                    effectAppliedRef.current = false;
+                    // Clear canvas ketika efek dihapus
+                    if (canvasRef.current) {
+                      const ctx = canvasRef.current.getContext('2d');
+                      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                    }
                   }}
                   className="text-xs bg-red-500 hover:bg-red-600 w-5 h-5 rounded-full flex items-center justify-center"
                 >
@@ -671,7 +646,11 @@ const CameraLive = () => {
                 <button 
                   onClick={() => {
                     setSelectedLipstickColor(null);
-                    effectAppliedRef.current = false;
+                    // Clear canvas ketika efek dihapus
+                    if (canvasRef.current) {
+                      const ctx = canvasRef.current.getContext('2d');
+                      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                    }
                   }}
                   className="text-xs bg-red-500 hover:bg-red-600 w-5 h-5 rounded-full flex items-center justify-center"
                 >
