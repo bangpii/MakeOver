@@ -399,10 +399,12 @@ const CameraLive = () => {
   return (
     <div className="min-h-screen flex flex-col bg-black text-white overflow-hidden">
 
-      <Animasi_Background/>
+      <div className="z-1">
+        <Animasi_Background/>
+      </div>
 
       {/* NAVBAR */}
-      <nav className="bg-white backdrop-blur-md border-b border-white flex items-center justify-between px-4 md:px-8 py-4 shadow-lg">
+      <nav className="bg-white backdrop-blur-md border-b border-white flex items-center justify-between px-4 md:px-8 py-4 shadow-lg z-100">
         <h1 className="text-xl text-black md:text-3xl font-black tracking-widest">
           Live <span className="text-pink-500">Camera</span>
         </h1>
@@ -417,7 +419,7 @@ const CameraLive = () => {
       </nav>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4 space-y-4 md:space-y-6">
+      <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4 space-y-4 md:space-y-6 z-100">
         {/* BACKEND STATUS */}
         <div className="w-full max-w-4xl">
           {backendStatus === "limited" && (
