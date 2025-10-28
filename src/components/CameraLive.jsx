@@ -275,30 +275,44 @@ const CameraLive = () => {
   }, [isCameraOn, captureAndProcessFrame]);
 
   const handleTakePhoto = async () => {
-    if (!isCameraOn || processingRef.current) return;
+    if (!isCameraOn) return;
 
     try {
       console.log("📸 Taking photo...");
       
-      // Capture current frame langsung tanpa menunggu
+      // Buat canvas untuk capture foto
       const canvas = document.createElement('canvas');
       const video = videoRef.current;
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
+      
+      // Draw video frame ke canvas
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // Jika ada efek, gunakan frame yang sudah diproses
-      if (canvasRef.current && (selectedCheekColor || selectedLipstickColor)) {
-        // const processedCtx = canvasRef.current.getContext('2d');
-        ctx.drawImage(canvasRef.current, 0, 0, canvas.width, canvas.height);
+      // Jika ada efek yang aktif, proses frame dengan efek
+      if (selectedCheekColor || selectedLipstickColor) {
+        const frameData = canvas.toDataURL('image/jpeg', 0.8);
+        const processedFrame = await processFrame(frameData);
+        
+        if (processedFrame) {
+          const img = new Image();
+          img.onload = () => {
+            // Clear canvas dan draw processed image
+            const displayCtx = canvasRef.current.getContext('2d');
+            displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+            displayCtx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
+            setCapturedPhoto(true);
+          };
+          img.src = processedFrame;
+          return;
+        }
       }
       
-      // Simpan ke canvas utama untuk preview
+      // Jika tidak ada efek, langsung tampilkan frame asli
       const displayCtx = canvasRef.current.getContext('2d');
       displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       displayCtx.drawImage(canvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
-      
       setCapturedPhoto(true);
       
     } catch (error) {
@@ -531,9 +545,9 @@ const CameraLive = () => {
 
           <button
             onClick={handleTakePhoto}
-            disabled={!isCameraOn || processingRef.current}
+            disabled={!isCameraOn}
             className={`flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl font-semibold shadow-lg transition-all duration-300 hover:scale-105 text-sm md:text-base min-w-[160px] md:min-w-[200px] justify-center flex-1 ${
-              isCameraOn && !processingRef.current
+              isCameraOn
                 ? "bg-green-600 hover:bg-green-700 text-white" 
                 : "bg-gray-600 text-gray-300 cursor-not-allowed"
             }`}
