@@ -1,20 +1,32 @@
-import React from 'react'
+import React, { useMemo } from "react";
 
 export default function Animasi_Background({ children }) {
+  // Generate hearts once only
+  const hearts = useMemo(() => {
+    return Array.from({ length: 40 }).map((_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      bottom: -(Math.random() * 40 + 10),
+      size: Math.random() * 4 + 3,
+      delay: Math.random() * 15,
+      duration: 25 + Math.random() * 20,
+    }));
+  }, []);
+
   return (
     <div className="relative w-full h-screen overflow-hidden bg-black">
-      {/* Floating big pink hearts with white border */}
+      {/* Floating giant pink hearts with rotation and pulsing glow */}
       <div className="absolute inset-0 pointer-events-none">
-        {[...Array(20)].map((_, i) => (
+        {hearts.map((heart) => (
           <div
-            key={i}
-            className="absolute text-pink-500 animate-float-heart drop-shadow-[0_0_6px_rgba(255,255,255,0.8)]"
+            key={heart.id}
+            className="absolute text-pink-500 animate-float-heart drop-shadow-[0_0_16px_rgba(255,105,180,0.9)]"
             style={{
-              left: `${Math.random() * 100}%`,
-              bottom: `-${Math.random() * 30 + 10}%`, // start from below the screen
-              fontSize: `${Math.random() * 2 + 2}rem`, // bigger hearts
-              animationDelay: `${Math.random() * 10}s`,
-              animationDuration: `${20 + Math.random() * 15}s` // slower movement
+              left: `${heart.left}%`,
+              bottom: `${heart.bottom}%`,
+              fontSize: `${heart.size}rem`,
+              animationDelay: `${heart.delay}s`,
+              animationDuration: `${heart.duration}s`,
             }}
           >
             ❤
@@ -27,7 +39,7 @@ export default function Animasi_Background({ children }) {
         {children}
       </div>
 
-      {/* Custom CSS animation for slow floating hearts */}
+      {/* Custom CSS animation */}
       <style>{`
         @keyframes floatHeart {
           0% {
@@ -38,19 +50,27 @@ export default function Animasi_Background({ children }) {
             opacity: 1;
           }
           50% {
-            transform: translateY(-50vh) scale(1.1) rotate(10deg);
+            transform: translateY(-60vh) scale(1.25) rotate(10deg);
             opacity: 0.9;
           }
           100% {
-            transform: translateY(-120vh) scale(1.3) rotate(-10deg);
+            transform: translateY(-130vh) scale(1.5) rotate(-10deg);
             opacity: 0;
           }
         }
+
+        @keyframes pulseGlow {
+          0%, 100% { filter: drop-shadow(0 0 8px rgba(255,105,180,0.6)); }
+          50% { filter: drop-shadow(0 0 20px rgba(255,105,180,1)); }
+        }
+
         .animate-float-heart {
           position: absolute;
-          animation: floatHeart ease-in-out infinite;
+          color: #ff4da6;
+          -webkit-text-stroke: 1px black;
+          animation: floatHeart ease-in-out infinite, pulseGlow 3s ease-in-out infinite;
         }
       `}</style>
     </div>
-  )
+  );
 }
