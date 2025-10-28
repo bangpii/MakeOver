@@ -117,7 +117,7 @@ const CameraLive = () => {
 
   // Fungsi untuk capture frame dan proses
   const captureAndProcessFrame = useCallback(async () => {
-    if (!videoRef.current || !isCameraOn || processingRef.current || pendingProcessRef.current) {
+    if (!videoRef.current || !isCameraOn || processingRef.current || pendingProcessRef.current || capturedPhoto) {
       return;
     }
 
@@ -163,7 +163,7 @@ const CameraLive = () => {
     } catch (error) {
       console.error('❌ Error in captureAndProcessFrame:', error);
     }
-  }, [isCameraOn, processFrame]);
+  }, [isCameraOn, processFrame, capturedPhoto]);
 
   // Setup video stream
   const handleToggleCamera = async () => {
@@ -205,7 +205,7 @@ const CameraLive = () => {
     }
   };
 
-  const closeCamera = () => {
+  const closeCamera = useCallback(() => {
     // Stop animation frame loop
     if (animationFrameIdRef.current) {
       cancelAnimationFrame(animationFrameIdRef.current);
@@ -220,6 +220,7 @@ const CameraLive = () => {
       videoRef.current.srcObject = null;
     }
     setIsCameraOn(false);
+    setCapturedPhoto(false);
     
     // Reset states
     setSelectedCheekColor(null);
@@ -227,7 +228,7 @@ const CameraLive = () => {
     processingRef.current = false;
     pendingProcessRef.current = false;
     lastProcessedFrameRef.current = null;
-  };
+  }, [stream]);
 
   // Processing loop untuk real-time effects
   useEffect(() => {
@@ -235,7 +236,8 @@ const CameraLive = () => {
     const PROCESS_INTERVAL = 300;
 
     const processLoop = (currentTime) => {
-      if (!isCameraOn) {
+      // Hentikan loop jika foto sudah diambil
+      if (!isCameraOn || capturedPhoto) {
         if (animationFrameIdRef.current) {
           cancelAnimationFrame(animationFrameIdRef.current);
           animationFrameIdRef.current = null;
@@ -252,13 +254,13 @@ const CameraLive = () => {
         frameCounterRef.current++;
       }
       
-      // Always continue the loop when camera is on
-      if (isCameraOn) {
+      // Continue the loop only when camera is on and no photo captured
+      if (isCameraOn && !capturedPhoto) {
         animationFrameIdRef.current = requestAnimationFrame(processLoop);
       }
     };
 
-    if (isCameraOn) {
+    if (isCameraOn && !capturedPhoto) {
       frameCounterRef.current = 0;
       lastProcessTime = 0;
       
@@ -272,13 +274,19 @@ const CameraLive = () => {
         animationFrameIdRef.current = null;
       }
     };
-  }, [isCameraOn, captureAndProcessFrame]);
+  }, [isCameraOn, capturedPhoto, captureAndProcessFrame]);
 
   const handleTakePhoto = async () => {
-    if (!isCameraOn) return;
+    if (!isCameraOn || capturedPhoto) return;
 
     try {
       console.log("📸 Taking photo...");
+      
+      // Stop the processing loop immediately
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
+      }
       
       // Capture current frame langsung
       const canvas = document.createElement('canvas');
@@ -288,18 +296,42 @@ const CameraLive = () => {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // Jika ada efek yang aktif, ambil dari canvas yang sudah diproses
-      if (canvasRef.current && (selectedCheekColor || selectedLipstickColor)) {
-        ctx.drawImage(canvasRef.current, 0, 0, canvas.width, canvas.height);
+      // Jika ada efek yang aktif, proses frame terakhir dengan efek
+      if (selectedCheekColor || selectedLipstickColor) {
+        const frameData = canvas.toDataURL('image/jpeg', 0.8);
+        const processedFrame = await processFrame(frameData);
+        
+        if (processedFrame) {
+          const img = new Image();
+          img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // Draw ke canvas utama untuk preview
+            const displayCtx = canvasRef.current.getContext('2d');
+            displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+            displayCtx.drawImage(canvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
+            
+            setCapturedPhoto(true);
+            console.log("✅ Photo captured successfully with effects");
+          };
+          img.src = processedFrame;
+        } else {
+          // Jika processing gagal, gunakan frame asli
+          const displayCtx = canvasRef.current.getContext('2d');
+          displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+          displayCtx.drawImage(canvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
+          setCapturedPhoto(true);
+          console.log("✅ Photo captured successfully (no effects)");
+        }
+      } else {
+        // Jika tidak ada efek, langsung draw ke canvas
+        const displayCtx = canvasRef.current.getContext('2d');
+        displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        displayCtx.drawImage(canvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
+        setCapturedPhoto(true);
+        console.log("✅ Photo captured successfully (no effects)");
       }
-      
-      // Simpan ke canvas utama untuk preview
-      const displayCtx = canvasRef.current.getContext('2d');
-      displayCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      displayCtx.drawImage(canvas, 0, 0, canvasRef.current.width, canvasRef.current.height);
-      
-      setCapturedPhoto(true);
-      console.log("✅ Photo captured successfully");
       
     } catch (error) {
       console.error('❌ Error taking photo:', error);
@@ -310,7 +342,7 @@ const CameraLive = () => {
     const newFacingMode = facingMode === "environment" ? "user" : "environment";
     setFacingMode(newFacingMode);
 
-    if (!isCameraOn) return;
+    if (!isCameraOn || capturedPhoto) return;
 
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
@@ -333,8 +365,8 @@ const CameraLive = () => {
       // Reset status ketika switch camera
       lastProcessedFrameRef.current = null;
       
-      // Update canvas size
-      if (canvasRef.current) {
+      // Update canvas size - PERBAIKAN: gunakan videoRef.current
+      if (canvasRef.current && videoRef.current) {
         canvasRef.current.width = videoRef.current.videoWidth;
         canvasRef.current.height = videoRef.current.videoHeight;
       }
@@ -363,6 +395,16 @@ const CameraLive = () => {
   const handleRetakePhoto = () => {
     setCapturedPhoto(false);
     lastProcessedFrameRef.current = null;
+    
+    // Restart processing loop jika kamera masih hidup
+    if (isCameraOn) {
+      const processLoop = () => {
+        if (!isCameraOn || capturedPhoto) return;
+        
+        animationFrameIdRef.current = requestAnimationFrame(processLoop);
+      };
+      animationFrameIdRef.current = requestAnimationFrame(processLoop);
+    }
   };
 
   const handleSavePhoto = () => {
@@ -380,7 +422,7 @@ const CameraLive = () => {
     return () => {
       closeCamera();
     };
-  }, []);
+  }, [closeCamera]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-900 to-black text-white overflow-hidden">
@@ -428,24 +470,25 @@ const CameraLive = () => {
 
         {/* CAMERA CONTAINER */}
         <div className="relative w-full max-w-4xl aspect-[3/4] md:aspect-[4/3] bg-black rounded-xl md:rounded-3xl border-2 md:border-4 border-white/30 shadow-xl md:shadow-2xl overflow-hidden">
-          {/* Video Element - SELALU TERLIHAT */}
+          {/* Video Element - Hanya terlihat saat belum capture photo */}
           <video 
             ref={videoRef} 
-            className="w-full h-full object-cover"
+            className={`w-full h-full object-cover ${capturedPhoto ? 'hidden' : 'block'}`}
             autoPlay 
             muted
             playsInline
           />
           
-          {/* Canvas Element - Overlay transparan di atas video */}
+          {/* Canvas Element - Menampilkan hasil foto */}
           <canvas
             ref={canvasRef}
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-              capturedPhoto ? 'opacity-100' : (selectedCheekColor || selectedLipstickColor) ? 'opacity-100' : 'opacity-0'
+            className={`absolute inset-0 w-full h-full object-cover ${
+              capturedPhoto ? 'opacity-100 block' : (selectedCheekColor || selectedLipstickColor) ? 'opacity-100' : 'opacity-0'
             }`}
             style={{
               mixBlendMode: 'normal',
-              pointerEvents: 'none'
+              pointerEvents: 'none',
+              display: capturedPhoto ? 'block' : 'none'
             }}
           />
 
@@ -511,6 +554,16 @@ const CameraLive = () => {
               </div>
             </div>
           )}
+
+          {/* Photo Captured Overlay */}
+          {capturedPhoto && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+              <div className="text-center text-white bg-black/70 px-4 py-2 rounded-lg">
+                <p className="text-lg font-semibold">📸 Photo Captured!</p>
+                <p className="text-sm">Save or Retake</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* CONTROL BUTTONS */}
@@ -525,20 +578,20 @@ const CameraLive = () => {
 
           <button
             onClick={handleTakePhoto}
-            disabled={!isCameraOn}
+            disabled={!isCameraOn || capturedPhoto}
             className={`flex items-center gap-2 px-6 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl font-semibold shadow-lg transition-all duration-300 hover:scale-105 text-sm md:text-base min-w-[160px] md:min-w-[200px] justify-center flex-1 ${
-              isCameraOn
+              isCameraOn && !capturedPhoto
                 ? "bg-green-600 hover:bg-green-700 text-white" 
                 : "bg-gray-600 text-gray-300 cursor-not-allowed"
             }`}
           >
             <i className="bx bx-camera text-lg md:text-xl"></i>
-            Take Photo
+            {capturedPhoto ? "Photo Taken" : "Take Photo"}
           </button>
         </div>
 
         {/* PERFORMANCE INFO */}
-        {isCameraOn && (
+        {isCameraOn && !capturedPhoto && (
           <div className="bg-white/5 backdrop-blur-md rounded-xl md:rounded-2xl p-2 md:p-3 border border-white/10 w-full max-w-md">
             <div className="text-center text-white/70 text-xs md:text-sm">
               <p>Frames Processed: {frameCounterRef.current}</p>
@@ -549,7 +602,7 @@ const CameraLive = () => {
         )}
 
         {/* SELECTED COLORS DISPLAY */}
-        {(selectedCheekColor || selectedLipstickColor) && isCameraOn && (
+        {(selectedCheekColor || selectedLipstickColor) && isCameraOn && !capturedPhoto && (
           <div className="flex flex-wrap gap-2 md:gap-4 items-center justify-center bg-white/10 backdrop-blur-md rounded-xl md:rounded-2xl p-3 md:p-4 border border-white/20 w-full max-w-md">
             <span className="text-white font-semibold text-sm md:text-base">Active Effects:</span>
             {selectedCheekColor && (
