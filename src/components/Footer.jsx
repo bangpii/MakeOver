@@ -14,7 +14,7 @@ const Footer = () => {
       {/* Social Icons */}
       <div className="flex justify-center gap-8 text-4xl md:text-5xl">
         <a
-          href="https://www.instagram.com/sodara_3a"
+          href="https://www.instagram.com/jehnshra/"
           target="_blank"
           rel="noreferrer"
           className="hover:text-pink-500 transition-all duration-300"
@@ -22,7 +22,7 @@ const Footer = () => {
           <i className="bx bxl-instagram"></i>
         </a>
         <a
-          href="mailto:example@gmail.com"
+          href="https://mail.google.com/mail/u/0/#search/jejesahira0103%40gmail.com?compose=new"
           className="hover:text-blue-400 transition-all duration-300"
         >
           <i className="bx bx-envelope"></i>
@@ -42,12 +42,12 @@ const Footer = () => {
         <p>
           Created by{" "}
           <a
-            href="https://www.instagram.com/sodara_3a?igsh=NTl2OWI5eTI3ODBp&utm_source=qr"
+            href="https://www.instagram.com/jehnshra/"
             target="_blank"
             rel="noreferrer"
             className="font-semibold text-white hover:text-pink-500 transition-all"
           >
-            JasaHub.
+            BeautyInsight.
           </a>{" "}
           | © 2025
         </p>
